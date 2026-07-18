@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CaptionAI Studio — محرر كابشن احترافي بالذكاء الاصطناعي</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Tajawal:wght@300;400;500;700;900&family=Almarai:wght@300;400;700;800&family=Changa:wght@300;400;600;800&family=El+Messiri:wght@400;600;700&family=Amiri:ital,wght@0,400;0,700;1,400&family=Reem+Kufi:wght@400;600;700&family=Lalezar&family=Noto+Kufi+Arabic:wght@300;400;700;900&family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&family=Inter:wght@300;400;600;800&family=Montserrat:wght@400;700;900&family=Bebas+Neue&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<link rel="stylesheet" href="css/style.css">
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: { extend: {
+    colors: {
+      base: { 950:'#0a0a0f', 900:'#101018', 850:'#14141f', 800:'#1a1a28', 700:'#252538', 600:'#33334a' },
+      accent: { DEFAULT:'#7c6cff', hover:'#8f80ff', dim:'#5a4de0' },
+      mint: '#3ddc97', rose: '#ff5c7a', amber2: '#ffb545'
+    },
+    fontFamily: { sans: ['Cairo','Tajawal','sans-serif'] }
+  }}
+};
+</script>
+</head>
+<body class="dark bg-base-950 text-gray-200 font-sans overflow-hidden">
+
+<div id="app-root" class="flex h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside id="sidebar" class="w-60 shrink-0 bg-base-900 border-l border-base-700/50 flex flex-col z-30">
+    <div class="p-4 flex items-center gap-3 border-b border-base-700/50">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent to-rose flex items-center justify-center shadow-lg shadow-accent/30">
+        <i class="fa-solid fa-closed-captioning text-white"></i>
+      </div>
+      <div>
+        <h1 class="font-black text-sm text-white leading-tight">CaptionAI Studio</h1>
+        <p class="text-[10px] text-gray-500">مدعوم بـ Gemini AI</p>
+      </div>
+    </div>
+
+    <nav id="main-nav" class="flex-1 p-3 space-y-1 overflow-y-auto">
+      <button data-page="dashboard" class="nav-btn active"><i class="fa-solid fa-house w-5"></i> لوحة التحكم</button>
+      <button data-page="generator" class="nav-btn"><i class="fa-solid fa-wand-magic-sparkles w-5"></i> استخراج الكابشن</button>
+      <button data-page="editor" class="nav-btn"><i class="fa-solid fa-pen-ruler w-5"></i> محرر الكابشن</button>
+      <button data-page="greenscreen" class="nav-btn"><i class="fa-solid fa-clapperboard w-5"></i> إزالة الخلفية الخضراء</button>
+      <button data-page="settings" class="nav-btn"><i class="fa-solid fa-gear w-5"></i> الإعدادات</button>
+    </nav>
+
+    <div class="p-3 border-t border-base-700/50 space-y-2">
+      <div id="api-status" class="text-[11px] flex items-center gap-2 px-2 py-1.5 rounded-lg bg-base-800">
+        <span class="w-2 h-2 rounded-full bg-rose inline-block" id="api-dot"></span>
+        <span id="api-status-text">لم يتم ضبط API Key</span>
+      </div>
+      <button id="theme-toggle" class="w-full text-xs flex items-center justify-center gap-2 py-2 rounded-lg bg-base-800 hover:bg-base-700 transition">
+        <i class="fa-solid fa-moon" id="theme-icon"></i> <span id="theme-label">الوضع الداكن</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main class="flex-1 flex flex-col min-w-0">
+
+    <!-- ============ PAGE: Dashboard ============ -->
+    <section id="page-dashboard" class="page active overflow-y-auto p-6">
+      <header class="mb-6">
+        <h2 class="text-2xl font-black text-white">لوحة التحكم</h2>
+        <p class="text-sm text-gray-400 mt-1">أنشئ مشروعاً جديداً أو تابع العمل على مشاريعك الأخيرة</p>
+      </header>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <button class="quick-card group" data-goto="generator">
+          <div class="quick-icon bg-accent/20 text-accent group-hover:bg-accent group-hover:text-white"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+          <h3 class="font-bold text-white">استخراج كابشن جديد</h3>
+          <p class="text-xs text-gray-400">ارفع فيديو أو صوت واستخرج النص بالذكاء الاصطناعي</p>
+        </button>
+        <button class="quick-card group" data-goto="editor">
+          <div class="quick-icon bg-mint/20 text-mint group-hover:bg-mint group-hover:text-white"><i class="fa-solid fa-pen-ruler"></i></div>
+          <h3 class="font-bold text-white">محرر الكابشن</h3>
+          <p class="text-xs text-gray-400">صمم وحرّك الكابشن مثل برامج المونتاج الاحترافية</p>
+        </button>
+        <button class="quick-card group" data-goto="greenscreen">
+          <div class="quick-icon bg-rose/20 text-rose group-hover:bg-rose group-hover:text-white"><i class="fa-solid fa-clapperboard"></i></div>
+          <h3 class="font-bold text-white">Green Screen</h3>
+          <p class="text-xs text-gray-400">إزالة الخلفية الخضراء وتصدير بقناة شفافية</p>
+        </button>
+      </div>
+
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-bold text-white"><i class="fa-solid fa-clock-rotate-left ml-2 text-accent"></i>المشاريع الأخيرة</h3>
+        <button id="refresh-projects" class="text-xs text-gray-400 hover:text-white transition"><i class="fa-solid fa-rotate ml-1"></i>تحديث</button>
+      </div>
+      <div id="projects-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <p class="text-sm text-gray-500 col-span-full py-8 text-center">جاري التحميل…</p>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: Generator ============ -->
+    <section id="page-generator" class="page overflow-y-auto p-6">
+      <header class="mb-6">
+        <h2 class="text-2xl font-black text-white">استخراج الكابشن <span class="text-accent">بالذكاء الاصطناعي</span></h2>
+        <p class="text-sm text-gray-400 mt-1">ارفع ملف فيديو أو صوت — سيتم استخراج الصوت وتحويله إلى كابشن عربي دقيق مع التوقيتات</p>
+      </header>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl">
+        <div class="space-y-4">
+          <div id="dropzone" class="dropzone">
+            <i class="fa-solid fa-cloud-arrow-up text-4xl text-accent mb-3"></i>
+            <p class="font-bold text-white">اسحب وأفلت الفيديو أو الصوت هنا</p>
+            <p class="text-xs text-gray-400 mt-1">MP4 · WebM · MOV · MP3 · WAV · M4A · OGG</p>
+            <button class="mt-4 px-5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-bold transition">اختيار ملف</button>
+            <input type="file" id="gen-file-input" class="hidden" accept="video/*,audio/*">
+          </div>
+
+          <div id="gen-file-info" class="hidden panel p-4">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-file-video text-2xl text-accent"></i>
+              <div class="flex-1 min-w-0">
+                <p id="gen-file-name" class="text-sm font-bold text-white truncate"></p>
+                <p id="gen-file-meta" class="text-xs text-gray-400"></p>
+              </div>
+              <button id="gen-file-remove" class="text-gray-500 hover:text-rose transition"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <video id="gen-preview" class="w-full mt-3 rounded-lg max-h-56 bg-black hidden" controls playsinline webkit-playsinline></video>
+            <audio id="gen-preview-audio" class="w-full mt-3 hidden" controls></audio>
+          </div>
+
+          <div class="panel p-4 space-y-3">
+            <h3 class="text-sm font-bold text-white"><i class="fa-solid fa-sliders ml-2 text-accent"></i>خيارات الاستخراج</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="field-label">اللغة
+                <select id="gen-lang" class="field">
+                  <option value="ar">العربية (فصحى ولهجات)</option>
+                  <option value="ar-eg">العربية — مصري</option>
+                  <option value="ar-sa">العربية — خليجي</option>
+                  <option value="ar-lev">العربية — شامي</option>
+                  <option value="ar-ma">العربية — مغاربي</option>
+                  <option value="en">English</option>
+                  <option value="auto">اكتشاف تلقائي</option>
+                </select>
+              </label>
+              <label class="field-label">تقسيم الجمل
+                <select id="gen-split" class="field">
+                  <option value="natural">طبيعي (حسب المعنى)</option>
+                  <option value="short">قصير (مناسب للشورتس)</option>
+                  <option value="word3">3-4 كلمات لكل سطر</option>
+                </select>
+              </label>
+            </div>
+            <div class="flex flex-wrap gap-4 text-xs">
+              <label class="check-label"><input type="checkbox" id="gen-tashkeel" class="check"> التشكيل</label>
+              <label class="check-label"><input type="checkbox" id="gen-punct" class="check" checked> علامات الترقيم</label>
+              <label class="check-label"><input type="checkbox" id="gen-words" class="check" checked> توقيت الكلمات (Word-level)</label>
+              <label class="check-label"><input type="checkbox" id="gen-emoji" class="check"> إضافة إيموجي مناسبة</label>
+            </div>
+            <label class="field-label">تعليمات إضافية (اختياري)
+              <input type="text" id="gen-custom" class="field" placeholder="مثال: اكتب الأرقام بالأرقام الهندية ٠١٢٣">
+            </label>
+          </div>
+
+          <button id="gen-start" class="w-full py-3.5 rounded-xl bg-gradient-to-l from-accent to-rose text-white font-black text-sm shadow-lg shadow-accent/20 hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+            <i class="fa-solid fa-bolt ml-2"></i>استخراج الكابشن الآن
+          </button>
+
+          <div id="gen-progress" class="hidden panel p-4">
+            <div class="flex items-center justify-between text-xs mb-2">
+              <span id="gen-progress-label" class="text-gray-300">جاري المعالجة…</span>
+              <span id="gen-progress-pct" class="text-accent font-bold">0%</span>
+            </div>
+            <div class="h-2 bg-base-700 rounded-full overflow-hidden">
+              <div id="gen-progress-bar" class="h-full bg-gradient-to-l from-accent to-rose rounded-full transition-all duration-300" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="panel p-4 min-h-[300px] flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-bold text-white"><i class="fa-solid fa-file-lines ml-2 text-mint"></i>النتيجة</h3>
+              <div id="gen-result-actions" class="hidden flex items-center gap-2">
+                <button id="gen-open-editor" class="px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold hover:bg-accent-hover transition"><i class="fa-solid fa-pen ml-1"></i>فتح في المحرر</button>
+              </div>
+            </div>
+            <div id="gen-result" class="flex-1 overflow-y-auto max-h-[50vh] space-y-2">
+              <p class="text-sm text-gray-500 text-center py-16">النتائج ستظهر هنا بعد الاستخراج</p>
+            </div>
+          </div>
+
+          <div id="gen-export-panel" class="hidden panel p-4">
+            <h3 class="text-sm font-bold text-white mb-3"><i class="fa-solid fa-download ml-2 text-amber2"></i>تحميل الملفات</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button class="export-btn" data-fmt="srt">SRT</button>
+              <button class="export-btn" data-fmt="vtt">VTT</button>
+              <button class="export-btn" data-fmt="json">JSON Timeline</button>
+              <button class="export-btn" data-fmt="capai">ملف المشروع</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: Editor ============ -->
+    <section id="page-editor" class="page flex flex-col min-h-0">
+      <div class="flex items-center gap-3 px-4 py-2 border-b border-base-700/50 bg-base-900">
+        <input id="ed-project-name" class="bg-transparent text-sm font-bold text-white outline-none border-b border-transparent focus:border-accent transition w-48" value="مشروع بدون اسم">
+        <span id="ed-autosave-badge" class="text-[10px] text-gray-500"><i class="fa-solid fa-cloud ml-1"></i>محفوظ</span>
+        <div class="flex-1"></div>
+        <button id="ed-import-btn" class="toolbar-btn" title="استيراد كابشن / فيديو"><i class="fa-solid fa-file-import"></i> استيراد</button>
+        <input type="file" id="ed-import-input" class="hidden" accept="video/*,audio/*,.srt,.vtt,.json,.capai">
+        <button id="ed-template-save" class="toolbar-btn" title="حفظ كقالب"><i class="fa-solid fa-bookmark"></i> قالب</button>
+        <button id="ed-style-export" class="toolbar-btn" title="تصدير إعدادات التصميم JSON"><i class="fa-solid fa-file-export"></i></button>
+        <button id="ed-style-import" class="toolbar-btn" title="استيراد إعدادات التصميم JSON"><i class="fa-solid fa-file-arrow-up"></i></button>
+        <input type="file" id="ed-style-import-input" class="hidden" accept=".json">
+        <button id="ed-export-video" class="px-4 py-1.5 rounded-lg bg-gradient-to-l from-accent to-rose text-white text-xs font-black hover:opacity-90 transition"><i class="fa-solid fa-film ml-1"></i>تصدير الفيديو</button>
+      </div>
+
+      <div class="flex flex-1 min-h-0">
+        <!-- Cues list -->
+        <div class="w-72 shrink-0 border-l border-base-700/50 bg-base-900 flex flex-col min-h-0">
+          <div class="p-3 border-b border-base-700/50 flex items-center justify-between">
+            <h3 class="text-xs font-bold text-white">الجمل <span id="ed-cue-count" class="text-gray-500"></span></h3>
+            <button id="ed-add-cue" class="text-accent hover:text-accent-hover text-xs"><i class="fa-solid fa-plus ml-1"></i>إضافة</button>
+          </div>
+          <div id="ed-cue-list" class="flex-1 overflow-y-auto p-2 space-y-1.5"></div>
+        </div>
+
+        <!-- Preview area -->
+        <div class="flex-1 flex flex-col min-w-0 min-h-0">
+          <div class="flex-1 flex items-center justify-center p-4 bg-base-950 relative min-h-0" id="ed-canvas-wrap">
+            <canvas id="ed-canvas" class="max-w-full max-h-full rounded-lg shadow-2xl bg-black cursor-move"></canvas>
+            <div id="ed-no-video" class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 pointer-events-none">
+              <i class="fa-solid fa-film text-5xl mb-3"></i>
+              <p class="text-sm">استورد فيديو أو ابدأ من صفحة الاستخراج</p>
+            </div>
+          </div>
+          <!-- Transport + Timeline -->
+          <div class="border-t border-base-700/50 bg-base-900 p-3 space-y-2">
+            <div class="flex items-center gap-3">
+              <button id="ed-play" class="w-9 h-9 rounded-full bg-accent hover:bg-accent-hover text-white transition"><i class="fa-solid fa-play" id="ed-play-icon"></i></button>
+              <span id="ed-time" class="text-xs font-mono text-gray-400 dir-ltr" dir="ltr">00:00.0 / 00:00.0</span>
+              <div class="flex-1"></div>
+              <label class="text-[10px] text-gray-500">نسبة العرض
+                <select id="ed-aspect" class="field !py-1 !text-[11px] !w-auto inline-block mr-1">
+                  <option value="source">حسب الفيديو</option>
+                  <option value="9:16">9:16 شورتس</option>
+                  <option value="16:9">16:9 يوتيوب</option>
+                  <option value="1:1">1:1 مربع</option>
+                </select>
+              </label>
+            </div>
+            <div id="ed-timeline" class="timeline">
+              <div id="ed-timeline-track" class="timeline-track"></div>
+              <div id="ed-playhead" class="playhead"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Style panel -->
+        <div class="w-80 shrink-0 border-r border-base-700/50 bg-base-900 flex flex-col min-h-0">
+          <div class="flex border-b border-base-700/50 text-[11px] font-bold">
+            <button class="style-tab active" data-tab="text">النص</button>
+            <button class="style-tab" data-tab="effects">التأثيرات</button>
+            <button class="style-tab" data-tab="anim">الحركة</button>
+            <button class="style-tab" data-tab="karaoke">Karaoke</button>
+          </div>
+          <div class="flex-1 overflow-y-auto p-3" id="style-panels">
+
+            <!-- TEXT TAB -->
+            <div class="style-panel active" data-panel="text">
+              <div class="space-y-3">
+                <label class="field-label">الخط
+                  <div class="flex gap-1.5">
+                    <select id="st-font" class="field flex-1"></select>
+                    <button id="st-font-upload" class="px-2.5 rounded-lg bg-base-700 hover:bg-base-600 text-xs" title="رفع خط TTF/OTF"><i class="fa-solid fa-upload"></i></button>
+                    <button id="st-font-local" class="px-2.5 rounded-lg bg-base-700 hover:bg-base-600 text-xs" title="قراءة خطوط الجهاز"><i class="fa-solid fa-computer"></i></button>
+                    <input type="file" id="st-font-file" class="hidden" accept=".ttf,.otf,.woff,.woff2" multiple>
+                  </div>
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="field-label">حجم الخط <span class="range-val" id="v-fontSize">64</span>
+                    <input type="range" id="st-fontSize" min="12" max="200" value="64" class="range"></label>
+                  <label class="field-label">وزن الخط
+                    <select id="st-fontWeight" class="field">
+                      <option value="300">خفيف</option><option value="400">عادي</option>
+                      <option value="600">متوسط</option><option value="700" selected>عريض</option>
+                      <option value="900">أسود</option>
+                    </select></label>
+                  <label class="field-label">تباعد الحروف <span class="range-val" id="v-letterSpacing">0</span>
+                    <input type="range" id="st-letterSpacing" min="-5" max="30" value="0" class="range"></label>
+                  <label class="field-label">تباعد السطور <span class="range-val" id="v-lineHeight">1.25</span>
+                    <input type="range" id="st-lineHeight" min="0.8" max="2.5" step="0.05" value="1.25" class="range"></label>
+                  <label class="field-label">دوران النص <span class="range-val" id="v-rotation">0°</span>
+                    <input type="range" id="st-rotation" min="-45" max="45" value="0" class="range"></label>
+                  <label class="field-label">الشفافية <span class="range-val" id="v-opacity">100%</span>
+                    <input type="range" id="st-opacity" min="0" max="100" value="100" class="range"></label>
+                </div>
+                <label class="field-label">المحاذاة
+                  <div class="seg-group" id="st-align">
+                    <button data-v="right"><i class="fa-solid fa-align-right"></i></button>
+                    <button data-v="center" class="active"><i class="fa-solid fa-align-center"></i></button>
+                    <button data-v="left"><i class="fa-solid fa-align-left"></i></button>
+                  </div></label>
+                <label class="field-label">الموضع
+                  <div class="seg-group" id="st-position">
+                    <button data-v="top">أعلى</button>
+                    <button data-v="middle">وسط</button>
+                    <button data-v="bottom" class="active">أسفل</button>
+                    <button data-v="custom"><i class="fa-solid fa-arrows-up-down-left-right"></i> يدوي</button>
+                  </div>
+                  <p class="text-[10px] text-gray-500 mt-1">💡 اسحب النص على المعاينة لتحريكه يدوياً</p></label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="field-label">لون النص
+                    <input type="color" id="st-color" value="#ffffff" class="color-input"></label>
+                  <label class="check-label mt-5"><input type="checkbox" id="st-gradientOn" class="check"> Gradient Text</label>
+                </div>
+                <div id="st-gradient-row" class="grid-cols-2 gap-3 hidden grid">
+                  <label class="field-label">لون التدرج ١<input type="color" id="st-grad1" value="#ff5c7a" class="color-input"></label>
+                  <label class="field-label">لون التدرج ٢<input type="color" id="st-grad2" value="#7c6cff" class="color-input"></label>
+                </div>
+              </div>
+            </div>
+
+            <!-- EFFECTS TAB -->
+            <div class="style-panel" data-panel="effects">
+              <div class="space-y-4">
+                <div class="fx-group">
+                  <label class="check-label font-bold"><input type="checkbox" id="st-strokeOn" class="check" checked> Stroke (حدود النص)</label>
+                  <div id="stroke-layers" class="space-y-2 mt-2"></div>
+                  <button id="stroke-add" class="text-[11px] text-accent hover:text-accent-hover mt-1"><i class="fa-solid fa-plus ml-1"></i>إضافة طبقة Stroke</button>
+                </div>
+                <div class="fx-group">
+                  <label class="check-label font-bold"><input type="checkbox" id="st-shadowOn" class="check" checked> Shadow (الظل)</label>
+                  <div class="grid grid-cols-2 gap-3 mt-2">
+                    <label class="field-label">لون الظل<input type="color" id="st-shadowColor" value="#000000" class="color-input"></label>
+                    <label class="field-label">Blur <span class="range-val" id="v-shadowBlur">8</span>
+                      <input type="range" id="st-shadowBlur" min="0" max="60" value="8" class="range"></label>
+                    <label class="field-label">Distance <span class="range-val" id="v-shadowDist">4</span>
+                      <input type="range" id="st-shadowDist" min="0" max="50" value="4" class="range"></label>
+                    <label class="field-label">Opacity <span class="range-val" id="v-shadowOpacity">80%</span>
+                      <input type="range" id="st-shadowOpacity" min="0" max="100" value="80" class="range"></label>
+                  </div>
+                </div>
+                <div class="fx-group">
+                  <label class="check-label font-bold"><input type="checkbox" id="st-bgOn" class="check"> Background (خلفية النص)</label>
+                  <div class="grid grid-cols-2 gap-3 mt-2">
+                    <label class="field-label">لون الخلفية<input type="color" id="st-bgColor" value="#000000" class="color-input"></label>
+                    <label class="field-label">شفافية <span class="range-val" id="v-bgOpacity">70%</span>
+                      <input type="range" id="st-bgOpacity" min="0" max="100" value="70" class="range"></label>
+                    <label class="field-label">Rounded <span class="range-val" id="v-bgRadius">14</span>
+                      <input type="range" id="st-bgRadius" min="0" max="60" value="14" class="range"></label>
+                    <label class="field-label">Padding <span class="range-val" id="v-bgPadding">16</span>
+                      <input type="range" id="st-bgPadding" min="0" max="60" value="16" class="range"></label>
+                    <label class="check-label"><input type="checkbox" id="st-bgGradient" class="check"> Gradient</label>
+                    <label class="check-label"><input type="checkbox" id="st-bgBlur" class="check"> Blur خلفية</label>
+                  </div>
+                  <div id="st-bggrad-row" class="grid grid-cols-2 gap-3 mt-2 hidden">
+                    <label class="field-label">تدرج ١<input type="color" id="st-bgGrad1" value="#7c6cff" class="color-input"></label>
+                    <label class="field-label">تدرج ٢<input type="color" id="st-bgGrad2" value="#ff5c7a" class="color-input"></label>
+                  </div>
+                </div>
+                <div class="fx-group">
+                  <p class="text-xs font-bold text-white mb-2">تلوين كلمات معينة</p>
+                  <p class="text-[10px] text-gray-500 mb-2">حدد كلمة في نص الجملة (بالقائمة اليمنى) ثم اختر لوناً — أو اكتب الكلمات هنا مفصولة بفواصل</p>
+                  <div class="flex gap-2">
+                    <input type="text" id="st-hlWords" class="field flex-1" placeholder="كلمة1, كلمة2">
+                    <input type="color" id="st-hlColor" value="#ffd23f" class="color-input !w-12"></input>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ANIMATION TAB -->
+            <div class="style-panel" data-panel="anim">
+              <div class="space-y-4">
+                <label class="field-label">تأثير الدخول
+                  <select id="st-animIn" class="field">
+                    <option value="none">بدون</option><option value="pop" selected>Pop</option>
+                    <option value="typing">Typing</option><option value="fade">Fade</option>
+                    <option value="slideUp">Slide Up</option><option value="slideDown">Slide Down</option>
+                    <option value="zoom">Zoom</option><option value="bounce">Bounce</option>
+                    <option value="glitch">Glitch</option><option value="shake">Shake</option>
+                  </select></label>
+                <label class="field-label">تأثير الخروج
+                  <select id="st-animOut" class="field">
+                    <option value="none">بدون</option><option value="fadeOut" selected>Fade Out</option>
+                    <option value="zoomOut">Zoom Out</option><option value="slide">Slide</option>
+                    <option value="blur">Blur</option>
+                  </select></label>
+                <label class="field-label">مدة الدخول <span class="range-val" id="v-animInDur">0.35s</span>
+                  <input type="range" id="st-animInDur" min="0.1" max="2" step="0.05" value="0.35" class="range"></label>
+                <label class="field-label">مدة الخروج <span class="range-val" id="v-animOutDur">0.3s</span>
+                  <input type="range" id="st-animOutDur" min="0.1" max="2" step="0.05" value="0.3" class="range"></label>
+                <label class="field-label">تأخير الدخول Delay <span class="range-val" id="v-animDelay">0s</span>
+                  <input type="range" id="st-animDelay" min="0" max="1" step="0.05" value="0" class="range"></label>
+                <label class="field-label">سرعة الأنيميشن <span class="range-val" id="v-animSpeed">1x</span>
+                  <input type="range" id="st-animSpeed" min="0.25" max="3" step="0.25" value="1" class="range"></label>
+              </div>
+            </div>
+
+            <!-- KARAOKE TAB -->
+            <div class="style-panel" data-panel="karaoke">
+              <div class="space-y-4">
+                <label class="check-label font-bold"><input type="checkbox" id="st-karaokeOn" class="check"> تفعيل Word Highlight</label>
+                <p class="text-[10px] text-gray-500">نظام كابشن ديناميكي مثل TikTok — يتطلب توقيت كلمات (Word-level) من الاستخراج</p>
+                <label class="field-label">نمط العرض
+                  <select id="st-karaokeMode" class="field">
+                    <option value="highlight">تلوين الكلمة المنطوقة</option>
+                    <option value="word-by-word">كلمة كلمة (تظهر تدريجياً)</option>
+                    <option value="single-word">كلمة واحدة فقط</option>
+                  </select></label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="field-label">لون الكلمة النشطة<input type="color" id="st-karaokeColor" value="#ffd23f" class="color-input"></label>
+                  <label class="field-label">خلفية الكلمة<input type="color" id="st-karaokeBg" value="#7c6cff" class="color-input"></label>
+                </div>
+                <label class="check-label"><input type="checkbox" id="st-karaokeBgOn" class="check"> خلفية خلف الكلمة النشطة</label>
+                <label class="check-label"><input type="checkbox" id="st-karaokeZoom" class="check" checked> تأثير Zoom على الكلمة النشطة</label>
+                <label class="field-label">قوة الـ Zoom <span class="range-val" id="v-karaokeScale">1.15</span>
+                  <input type="range" id="st-karaokeScale" min="1" max="1.6" step="0.05" value="1.15" class="range"></label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Templates strip -->
+          <div class="border-t border-base-700/50 p-2">
+            <p class="text-[10px] text-gray-500 mb-1.5 px-1">قوالب جاهزة</p>
+            <div id="ed-presets" class="flex gap-1.5 overflow-x-auto pb-1"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: Green Screen ============ -->
+    <section id="page-greenscreen" class="page overflow-y-auto p-6">
+      <header class="mb-6">
+        <h2 class="text-2xl font-black text-white">إزالة الخلفية الخضراء <span class="text-mint">Chroma Key</span></h2>
+        <p class="text-sm text-gray-400 mt-1">ارفع فيديو Green Screen واحصل على فيديو بخلفية شفافة</p>
+      </header>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl">
+        <div class="lg:col-span-2 space-y-4">
+          <div id="gs-dropzone" class="dropzone !py-8">
+            <i class="fa-solid fa-clapperboard text-3xl text-mint mb-2"></i>
+            <p class="font-bold text-white text-sm">اسحب فيديو Green Screen هنا</p>
+            <button class="mt-3 px-4 py-1.5 rounded-lg bg-mint text-base-950 text-xs font-bold">اختيار ملف</button>
+            <input type="file" id="gs-file-input" class="hidden" accept="video/*">
+          </div>
+          <div class="panel p-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="text-[11px] text-gray-400 mb-1.5 font-bold">الأصلي</p>
+                <video id="gs-video" class="w-full rounded-lg bg-black max-h-64" controls playsinline webkit-playsinline muted></video>
+              </div>
+              <div>
+                <p class="text-[11px] text-gray-400 mb-1.5 font-bold">بعد الإزالة (معاينة حيّة)</p>
+                <div class="checker rounded-lg overflow-hidden"><canvas id="gs-canvas" class="w-full max-h-64 block"></canvas></div>
+              </div>
+            </div>
+          </div>
+          <div id="gs-progress" class="hidden panel p-4">
+            <div class="flex items-center justify-between text-xs mb-2">
+              <span id="gs-progress-label" class="text-gray-300">جاري المعالجة…</span>
+              <span id="gs-progress-pct" class="text-mint font-bold">0%</span>
+            </div>
+            <div class="h-2 bg-base-700 rounded-full overflow-hidden">
+              <div id="gs-progress-bar" class="h-full bg-mint rounded-full transition-all" style="width:0%"></div>
+            </div>
+            <button id="gs-cancel" class="mt-2 text-xs text-rose hover:underline">إلغاء</button>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="panel p-4 space-y-3">
+            <h3 class="text-sm font-bold text-white"><i class="fa-solid fa-sliders ml-2 text-mint"></i>إعدادات Chroma Key</h3>
+            <label class="field-label">لون الكروما
+              <div class="flex gap-2 items-center">
+                <input type="color" id="gs-keyColor" value="#00ff00" class="color-input flex-1">
+                <button id="gs-pick-color" class="px-3 py-2 rounded-lg bg-base-700 hover:bg-base-600 text-xs" title="التقاط اللون من الفيديو"><i class="fa-solid fa-eye-dropper"></i></button>
+              </div></label>
+            <label class="field-label">Threshold (قوة الإزالة) <span class="range-val" id="v-gsThreshold">0.30</span>
+              <input type="range" id="gs-threshold" min="0.05" max="0.8" step="0.01" value="0.30" class="range"></label>
+            <label class="field-label">Edge Smoothing <span class="range-val" id="v-gsSmooth">0.10</span>
+              <input type="range" id="gs-smooth" min="0" max="0.4" step="0.01" value="0.10" class="range"></label>
+            <label class="field-label">Feather (نعومة الحواف) <span class="range-val" id="v-gsFeather">1</span>
+              <input type="range" id="gs-feather" min="0" max="5" step="1" value="1" class="range"></label>
+            <label class="field-label">Spill Removal (إزالة الانعكاس الأخضر) <span class="range-val" id="v-gsSpill">0.5</span>
+              <input type="range" id="gs-spill" min="0" max="1" step="0.05" value="0.5" class="range"></label>
+            <label class="field-label">Blur Edges <span class="range-val" id="v-gsBlur">0</span>
+              <input type="range" id="gs-blur" min="0" max="4" step="1" value="0" class="range"></label>
+          </div>
+          <div class="panel p-4 space-y-2">
+            <h3 class="text-sm font-bold text-white mb-1"><i class="fa-solid fa-download ml-2 text-amber2"></i>التصدير</h3>
+            <button id="gs-export-webm" class="gs-export-btn" disabled><i class="fa-solid fa-film w-5"></i> WebM Alpha (شفاف) <span class="text-[9px] text-gray-500 block">VP9 مع قناة ألفا — الأفضل</span></button>
+            <button id="gs-export-png" class="gs-export-btn" disabled><i class="fa-solid fa-images w-5"></i> PNG Sequence (ZIP) <span class="text-[9px] text-gray-500 block">صور شفافة لكل فريم — لبرامج المونتاج</span></button>
+            <button id="gs-export-frame" class="gs-export-btn" disabled><i class="fa-solid fa-image w-5"></i> PNG للفريم الحالي</button>
+            <p class="text-[10px] text-gray-500 mt-1">💡 MOV/ProRes Alpha غير مدعوم في المتصفح — استخدم PNG Sequence واستوردها في برنامج المونتاج، أو WebM Alpha مباشرة.</p>
+            <label class="field-label mt-2">FPS التصدير
+              <select id="gs-fps" class="field"><option value="30">30</option><option value="60">60</option><option value="24">24</option></select></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: Settings ============ -->
+    <section id="page-settings" class="page overflow-y-auto p-6">
+      <header class="mb-6">
+        <h2 class="text-2xl font-black text-white">الإعدادات</h2>
+        <p class="text-sm text-gray-400 mt-1">إعداد Gemini API وإدارة الخطوط وخيارات التصدير</p>
+      </header>
+
+      <div class="max-w-2xl space-y-5">
+        <div class="panel p-5 space-y-4">
+          <h3 class="font-bold text-white"><i class="fa-brands fa-google ml-2 text-accent"></i>Gemini API</h3>
+          <label class="field-label">API Key
+            <div class="flex gap-2">
+              <input type="password" id="set-apikey" class="field flex-1 dir-ltr" dir="ltr" placeholder="AIza...">
+              <button id="set-apikey-toggle" class="px-3 rounded-lg bg-base-700 hover:bg-base-600"><i class="fa-solid fa-eye"></i></button>
+            </div>
+            <p class="text-[10px] text-gray-500 mt-1">يُحفظ محلياً على جهازك فقط (localStorage) ولا يُرسل لأي خادم غير Google. احصل على مفتاح مجاني من <a href="https://aistudio.google.com/apikey" target="_blank" class="text-accent hover:underline">Google AI Studio</a></p>
+          </label>
+          <label class="field-label">الموديل
+            <select id="set-model" class="field dir-ltr" dir="ltr">
+              <option value="gemini-3.5-flash" selected>gemini-3.5-flash (الافتراضي)</option>
+              <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+              <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+              <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+              <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+            </select></label>
+          <div class="flex gap-2">
+            <button id="set-test-api" class="px-4 py-2 rounded-lg bg-base-700 hover:bg-base-600 text-xs font-bold transition"><i class="fa-solid fa-plug ml-1"></i>اختبار الاتصال</button>
+            <button id="set-save-api" class="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-bold transition"><i class="fa-solid fa-check ml-1"></i>حفظ</button>
+            <span id="set-api-result" class="text-xs self-center"></span>
+          </div>
+        </div>
+
+        <div class="panel p-5 space-y-3">
+          <h3 class="font-bold text-white"><i class="fa-solid fa-font ml-2 text-mint"></i>إدارة الخطوط</h3>
+          <div class="flex gap-2">
+            <button id="set-font-upload" class="px-4 py-2 rounded-lg bg-base-700 hover:bg-base-600 text-xs font-bold"><i class="fa-solid fa-upload ml-1"></i>رفع خط TTF / OTF</button>
+            <button id="set-font-local" class="px-4 py-2 rounded-lg bg-base-700 hover:bg-base-600 text-xs font-bold"><i class="fa-solid fa-computer ml-1"></i>قراءة خطوط الجهاز</button>
+            <input type="file" id="set-font-file" class="hidden" accept=".ttf,.otf,.woff,.woff2" multiple>
+          </div>
+          <div id="set-fonts-list" class="space-y-1.5"></div>
+        </div>
+
+        <div class="panel p-5 space-y-3">
+          <h3 class="font-bold text-white"><i class="fa-solid fa-film ml-2 text-amber2"></i>إعدادات التصدير الافتراضية</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="field-label">الدقة
+              <select id="set-resolution" class="field">
+                <option value="1080x1920">1080×1920 (Shorts)</option>
+                <option value="1920x1080">1920×1080 (YouTube)</option>
+                <option value="source">دقة الفيديو الأصلي</option>
+                <option value="custom">مخصص</option>
+              </select></label>
+            <label class="field-label">FPS
+              <select id="set-fps" class="field"><option value="30">30</option><option value="60">60</option></select></label>
+            <label class="field-label">Bitrate (Mbps) <span class="range-val" id="v-bitrate">8</span>
+              <input type="range" id="set-bitrate" min="2" max="40" value="8" class="range"></label>
+            <label class="field-label">الصيغة المفضلة
+              <select id="set-format" class="field">
+                <option value="webm">WebM</option><option value="mp4">MP4 (إن كان مدعوماً)</option>
+              </select></label>
+          </div>
+          <div id="set-custom-res" class="hidden grid grid-cols-2 gap-3">
+            <label class="field-label">العرض<input type="number" id="set-res-w" class="field" value="1080"></label>
+            <label class="field-label">الارتفاع<input type="number" id="set-res-h" class="field" value="1920"></label>
+          </div>
+          <button id="set-save-export" class="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-bold transition"><i class="fa-solid fa-check ml-1"></i>حفظ الإعدادات</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ===== Export Modal ===== -->
+<div id="export-modal" class="modal hidden">
+  <div class="modal-box max-w-md">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-black text-white"><i class="fa-solid fa-film ml-2 text-accent"></i>تصدير الفيديو</h3>
+      <button class="modal-close text-gray-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <label class="field-label">الصيغة
+          <select id="ex-format" class="field">
+            <option value="webm">WebM (VP9)</option>
+            <option value="mp4">MP4 (H.264)</option>
+          </select></label>
+        <label class="field-label">FPS
+          <select id="ex-fps" class="field"><option value="30">30</option><option value="60">60</option></select></label>
+        <label class="field-label">الدقة
+          <select id="ex-resolution" class="field">
+            <option value="source">دقة المعاينة</option>
+            <option value="1080x1920">1080×1920 Shorts</option>
+            <option value="1920x1080">1920×1080 YouTube</option>
+            <option value="custom">مخصص</option>
+          </select></label>
+        <label class="field-label">Bitrate (Mbps) <span class="range-val" id="v-exBitrate">8</span>
+          <input type="range" id="ex-bitrate" min="2" max="40" value="8" class="range"></label>
+      </div>
+      <div id="ex-custom-res" class="hidden grid grid-cols-2 gap-3">
+        <label class="field-label">العرض<input type="number" id="ex-res-w" class="field" value="1080"></label>
+        <label class="field-label">الارتفاع<input type="number" id="ex-res-h" class="field" value="1920"></label>
+      </div>
+      <p id="ex-support-note" class="text-[10px] text-gray-500"></p>
+      <div id="ex-progress" class="hidden">
+        <div class="flex items-center justify-between text-xs mb-1.5">
+          <span id="ex-progress-label" class="text-gray-300">جاري التصدير…</span>
+          <span id="ex-progress-pct" class="text-accent font-bold">0%</span>
+        </div>
+        <div class="h-2 bg-base-700 rounded-full overflow-hidden">
+          <div id="ex-progress-bar" class="h-full bg-gradient-to-l from-accent to-rose rounded-full transition-all" style="width:0%"></div>
+        </div>
+      </div>
+      <button id="ex-start" class="w-full py-3 rounded-xl bg-gradient-to-l from-accent to-rose text-white font-black text-sm hover:opacity-90 transition">
+        <i class="fa-solid fa-bolt ml-2"></i>بدء التصدير
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Toast ===== -->
+<div id="toast-wrap" class="fixed bottom-4 left-4 z-[100] space-y-2"></div>
+
+<script src="js/utils.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/fonts.js"></script>
+<script src="js/gemini.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/generator.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/greenscreen.js"></script>
+<script src="js/exporter.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
