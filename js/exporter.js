@@ -7,6 +7,13 @@ const Exporter = {
   init() {
     $('#ex-start').addEventListener('click', () => this.start());
     $('#ex-resolution').addEventListener('change', e => $('#ex-custom-res').classList.toggle('hidden', e.target.value !== 'custom'));
+    $('#ex-bg').addEventListener('change', e => {
+      const v = e.target.value;
+      $('#ex-bg-color').classList.toggle('hidden', v !== 'color');
+      // الشفاف يتطلب WebM
+      if (v === 'transparent') { $('#ex-format').value = 'webm'; $('#ex-format').disabled = true; }
+      else $('#ex-format').disabled = false;
+    });
     $('#ex-bitrate').addEventListener('input', e => $('#v-exBitrate').textContent = e.target.value);
     $$('.modal-close').forEach(b => b.addEventListener('click', () => b.closest('.modal').classList.add('hidden')));
     $('#export-modal').addEventListener('click', e => { if (e.target.id === 'export-modal' && !this.exporting) e.target.classList.add('hidden'); });
@@ -18,6 +25,9 @@ const Exporter = {
     const ex = Store.settings.export;
     $('#ex-fps').value = ex.fps; $('#ex-bitrate').value = ex.bitrate; $('#v-exBitrate').textContent = ex.bitrate;
     $('#ex-format').value = this.mp4Supported() && ex.format === 'mp4' ? 'mp4' : 'webm';
+    $('#ex-format').disabled = false;
+    // إذا لا يوجد فيديو، اجعل الخلفية الخضراء هي الافتراضي
+    if (!Editor.hasVideo()) $('#ex-bg').value = 'green';
     // support note
     $('#ex-support-note').textContent = this.mp4Supported()
       ? '✔ متصفحك يدعم MP4 (H.264) و WebM'
@@ -74,14 +84,18 @@ const Exporter = {
       canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
 
+      const bgMode = $('#ex-bg').value; // video | green | transparent | color
+      const bgColor = bgMode === 'green' ? '#00ff00' : bgMode === 'color' ? $('#ex-bg-color').value : '#000000';
+      const useVideoBg = bgMode === 'video';
+
       const hasVideo = Editor.hasVideo();
       const v = Editor.video;
       const duration = hasVideo ? v.duration : Editor.duration;
 
       const stream = canvas.captureStream(fps);
-      // include original audio track if video present
+      // include original audio track if video present AND we're using the video background
       // (createMediaElementSource can only be called ONCE per element — cache the graph)
-      if (hasVideo) {
+      if (hasVideo && useVideoBg) {
         try {
           if (!this._audioGraph) {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -103,8 +117,9 @@ const Exporter = {
       this.progress(0, 'جاري التصدير (تشغيل حقيقي Realtime)…');
 
       const drawFrame = (t) => {
-        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-        if (hasVideo && v.readyState >= 2) {
+        ctx.clearRect(0, 0, W, H);
+        if (bgMode !== 'transparent') { ctx.fillStyle = bgColor; ctx.fillRect(0, 0, W, H); }
+        if (useVideoBg && hasVideo && v.readyState >= 2) {
           const s = Math.max(W / v.videoWidth, H / v.videoHeight);
           const dw = v.videoWidth * s, dh = v.videoHeight * s;
           ctx.drawImage(v, (W - dw) / 2, (H - dh) / 2, dw, dh);
@@ -114,7 +129,7 @@ const Exporter = {
 
       recorder.start(250);
 
-      if (hasVideo) {
+      if (hasVideo && useVideoBg) {
         // realtime playback capture (keeps audio synced)
         v.currentTime = 0;
         await new Promise(r => { const on = () => { v.removeEventListener('seeked', on); r(); }; v.addEventListener('seeked', on); });
@@ -131,7 +146,7 @@ const Exporter = {
         });
         v.pause();
       } else {
-        // captions only: simulated clock (still realtime for MediaRecorder timing)
+        // captions on green/transparent/color background: simulated clock (realtime for MediaRecorder timing)
         const t0 = performance.now();
         await new Promise(resolve => {
           const loop = (now) => {

@@ -19,10 +19,10 @@ html.light .nav-btn:hover { background: #e6e8f2; color: #111; }
 html.light .nav-btn.active { color: #4c3fd6; }
 
 /* ---- Pages ---- */
-.page { display: none; }
-.page.active { display: flex; flex-direction: column; }
+/* !important needed: Tailwind CDN injects utilities (e.g. .flex) after this file */
+.page:not(.active) { display: none !important; }
 section.page.active { display: block; }
-#page-editor.active { display: flex; }
+#page-editor.active { display: flex !important; flex-direction: column; }
 
 /* ---- Panels / cards ---- */
 .panel { background: #14141f; border: 1px solid rgba(80,80,120,.22); border-radius: 16px; }

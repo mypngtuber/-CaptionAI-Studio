@@ -174,6 +174,7 @@ const Editor = {
   // ---------- Cues ----------
   loadCues(cues) {
     this.cues = cues;
+    this.ensureAllWords();
     if (!this.hasVideo() && cues.length) this.duration = Math.max(...cues.map(c => c.end)) + 1;
     this.activeCueId = cues[0]?.id || null;
     this.projectId = this.projectId || U.uid();
@@ -184,6 +185,7 @@ const Editor = {
   addCue() {
     const start = this.time;
     const cue = { id: U.uid(), start, end: Math.min(start + 2, this.duration), text: 'نص جديد', words: [] };
+    this.regenWords(cue);
     this.cues.push(cue);
     this.cues.sort((a, b) => a.start - b.start);
     this.activeCueId = cue.id;
@@ -214,18 +216,68 @@ const Editor = {
           <button class="cue-del text-gray-600 hover:text-rose text-[10px]"><i class="fa-solid fa-trash"></i></button>
         </div>
         <textarea class="cue-text" rows="1">${c.text.replace(/</g, '&lt;')}</textarea>`;
+      div.dataset.id = c.id;
       div.addEventListener('click', e => {
         if (e.target.closest('.cue-del')) return;
-        this.activeCueId = c.id;
-        this.seek(c.start + 0.05);
-        this.renderCueList(); this.renderTimeline();
+        const editingText = e.target.classList.contains('cue-text');
+        // لا نعيد بناء القائمة حتى لا يفقد مربع النص الفوكس أثناء الكتابة
+        this.setActiveCue(c.id, !editingText);
       });
       div.querySelector('.cue-del').addEventListener('click', () => this.deleteCue(c.id));
       const ta = div.querySelector('.cue-text');
       const fit = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
-      ta.addEventListener('input', () => { c.text = ta.value; fit(); this.renderFrame(); this.autosaveDebounced(); });
+      ta.addEventListener('input', () => {
+        c.text = ta.value;
+        // النص تغيّر → توقيتات الكلمات القديمة لم تعد مطابقة — أعد توليدها تلقائياً
+        this.regenWords(c);
+        fit(); this.renderFrame(); this.updateTimelineCueLabel(c); this.autosaveDebounced();
+      });
       setTimeout(fit, 0);
       wrap.appendChild(div);
+    }
+  },
+
+  /** تفعيل جملة بدون إعادة بناء القائمة (حتى لا ينقطع الفوكس) */
+  setActiveCue(id, seekToCue = false) {
+    this.activeCueId = id;
+    $$('#ed-cue-list .cue-item').forEach(el => el.classList.toggle('active', el.dataset.id === id));
+    $$('#ed-timeline-track .tl-cue').forEach(el => el.classList.toggle('active', el.dataset.id === id));
+    if (seekToCue) {
+      const c = this.cues.find(x => x.id === id);
+      if (c) this.seek(c.start + 0.05);
+    }
+  },
+
+  /** تحديث نص مقطع التايملاين بدون إعادة بناء كاملة */
+  updateTimelineCueLabel(cue) {
+    const el = document.querySelector(`#ed-timeline-track .tl-cue[data-id="${cue.id}"] span`);
+    if (el) el.textContent = cue.text.slice(0, 30);
+  },
+
+  /**
+   * توليد/إعادة توليد توقيتات الكلمات تلقائياً (لملفات SRT/VTT أو بعد تعديل النص)
+   * توزيع زمني متناسب مع طول كل كلمة — يجعل Karaoke (قالب تيك توك) يعمل دائماً
+   */
+  regenWords(cue) {
+    const tokens = (cue.text || '').split(/\s+/).filter(Boolean);
+    if (!tokens.length) { cue.words = []; return; }
+    const dur = Math.max(cue.end - cue.start, 0.1);
+    const totalLen = tokens.reduce((s, t) => s + Math.max(t.length, 2), 0);
+    let t = cue.start;
+    cue.words = tokens.map(tok => {
+      const wDur = dur * Math.max(tok.length, 2) / totalLen;
+      const w = { w: tok, s: +t.toFixed(3), e: +(t + wDur).toFixed(3) };
+      t += wDur;
+      return w;
+    });
+    cue._autoWords = true;
+  },
+
+  /** تأكد أن كل الجمل لديها توقيت كلمات (للمستورد من SRT/VTT بدون words) */
+  ensureAllWords() {
+    for (const c of this.cues) {
+      if (!Array.isArray(c.words) || !c.words.length) this.regenWords(c);
+      else if (c._autoWords) continue;
     }
   },
 
@@ -275,7 +327,11 @@ const Editor = {
     });
 
     window.addEventListener('mouseup', () => {
-      if (dragMode && dragMode !== 'scrub') { this.renderCueList(); this.autosave(); }
+      if (dragMode && dragMode !== 'scrub') {
+        // إذا كانت توقيتات الكلمات مولّدة تلقائياً أعد توليدها حسب التوقيت الجديد
+        if (dragCue && dragCue._autoWords) this.regenWords(dragCue);
+        this.renderCueList(); this.autosave();
+      }
       dragMode = null; dragCue = null;
     });
   },
