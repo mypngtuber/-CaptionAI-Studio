@@ -529,9 +529,16 @@ const Editor = {
     this.style = { ...DEFAULT_STYLE(), ...style };
     if (!Array.isArray(this.style.strokes) || !this.style.strokes.length) this.style.strokes = [{ color: '#000000', width: 6 }];
     this.syncControlsFromStyle();
-    Fonts.ensureLoaded(this.style.fontFamily, this.style.fontWeight).then(() => this.renderFrame());
     this.renderFrame();
+    Fonts.ensureLoaded(this.style.fontFamily, this.style.fontWeight).then(() => {
+      this.renderFrame();
+    });
     this.autosaveDebounced();
+  },
+
+  resetToDefaultStyle() {
+    this.applyStyle(DEFAULT_STYLE());
+    toast('تمت إزالة القالب والرجوع للتصميم الافتراضي ✔', 'ok');
   },
 
   syncControlsFromStyle() {
@@ -570,18 +577,31 @@ const Editor = {
 
   // ---------- Presets ----------
   PRESETS: [
-    { name: '🔥 تيك توك', style: { fontFamily: 'Cairo', fontSize: 72, fontWeight: 900, strokes: [{ color: '#000000', width: 8 }], karaokeOn: true, karaokeMode: 'highlight', karaokeColor: '#ffd23f', karaokeZoom: true, animIn: 'pop', animOut: 'fadeOut', shadowOn: true, shadowBlur: 12 } },
-    { name: '💜 نيون', style: { fontFamily: 'Changa', fontSize: 66, fontWeight: 800, color: '#ffffff', strokes: [{ color: '#7c6cff', width: 10 }, { color: '#2a1a6e', width: 20 }], shadowOn: true, shadowColor: '#7c6cff', shadowBlur: 30, shadowDist: 0, animIn: 'zoom' } },
-    { name: '📦 صندوق', style: { fontFamily: 'Tajawal', fontSize: 56, fontWeight: 700, bgOn: true, bgColor: '#000000', bgOpacity: 0.75, bgRadius: 16, bgPadding: 20, strokeOn: false, shadowOn: false, animIn: 'slideUp' } },
-    { name: '🌈 تدرج', style: { fontFamily: 'Almarai', fontSize: 70, fontWeight: 800, gradientOn: true, grad1: '#ff5c7a', grad2: '#7c6cff', strokes: [{ color: '#ffffff', width: 3 }], animIn: 'bounce' } },
-    { name: '✍️ كتابة', style: { fontFamily: 'Amiri', fontSize: 60, fontWeight: 700, animIn: 'typing', animInDur: 1.2, strokeOn: false, shadowOn: true, shadowBlur: 6 } },
-    { name: '⚡ جليتش', style: { fontFamily: 'Noto Kufi Arabic', fontSize: 64, fontWeight: 900, animIn: 'glitch', color: '#3ddc97', strokes: [{ color: '#000000', width: 6 }] } },
-    { name: '🎬 سينمائي', style: { fontFamily: 'El Messiri', fontSize: 52, fontWeight: 600, letterSpacing: 4, position: 'bottom', animIn: 'fade', animInDur: 0.8, animOut: 'fadeOut', strokeOn: false, shadowOn: true, shadowBlur: 14, shadowDist: 2 } }
+    { name: '🔥 تيك توك / ريلز', style: { fontFamily: 'Cairo', fontSize: 72, fontWeight: 900, strokes: [{ color: '#000000', width: 8 }], karaokeOn: true, karaokeMode: 'highlight', karaokeColor: '#ffd23f', karaokeZoom: true, animIn: 'pop', animOut: 'fadeOut', shadowOn: true, shadowBlur: 12 } },
+    { name: '⚡ هورموزي (Hormozi)', style: { fontFamily: 'Montserrat', fontSize: 76, fontWeight: 900, color: '#ffffff', strokes: [{ color: '#000000', width: 12 }], karaokeOn: true, karaokeMode: 'highlight', karaokeColor: '#00ff66', karaokeBg: '#000000', karaokeBgOn: true, karaokeZoom: true, karaokeScale: 1.2, animIn: 'pop', animOut: 'none' } },
+    { name: '🏆 مستر بيست (MrBeast)', style: { fontFamily: 'Montserrat', fontSize: 74, fontWeight: 900, color: '#ffffff', strokes: [{ color: '#000000', width: 10 }], shadowOn: true, shadowColor: '#000000', shadowBlur: 16, shadowDist: 6, karaokeOn: true, karaokeMode: 'single-word', karaokeColor: '#ffe600', karaokeZoom: true, karaokeScale: 1.25, animIn: 'bounce' } },
+    { name: '📰 وثائقي فوكس (Vox)', style: { fontFamily: 'IBM Plex Sans Arabic', fontSize: 60, fontWeight: 700, color: '#ffffff', bgOn: true, bgColor: '#ffcc00', bgOpacity: 0.95, bgRadius: 6, bgPadding: 14, strokeOn: false, shadowOn: false, animIn: 'slideUp', animOut: 'fadeOut' } },
+    { name: '💜 نيون سايبر', style: { fontFamily: 'Changa', fontSize: 66, fontWeight: 800, color: '#ffffff', strokes: [{ color: '#7c6cff', width: 10 }, { color: '#2a1a6e', width: 20 }], shadowOn: true, shadowColor: '#7c6cff', shadowBlur: 30, shadowDist: 0, animIn: 'zoom' } },
+    { name: '📦 صندوق عصري', style: { fontFamily: 'Tajawal', fontSize: 56, fontWeight: 700, bgOn: true, bgColor: '#11111a', bgOpacity: 0.85, bgRadius: 16, bgPadding: 20, strokeOn: false, shadowOn: false, animIn: 'slideUp' } },
+    { name: '🌈 تدرج ديناميكي', style: { fontFamily: 'Almarai', fontSize: 70, fontWeight: 800, gradientOn: true, grad1: '#ff5c7a', grad2: '#7c6cff', strokes: [{ color: '#ffffff', width: 3 }], animIn: 'bounce' } },
+    { name: '✍️ آلة كاتبة', style: { fontFamily: 'Amiri', fontSize: 60, fontWeight: 700, animIn: 'typing', animInDur: 1.2, strokeOn: false, shadowOn: true, shadowBlur: 6 } },
+    { name: '⚡ جليتش حماسي', style: { fontFamily: 'Noto Kufi Arabic', fontSize: 64, fontWeight: 900, animIn: 'glitch', color: '#3ddc97', strokes: [{ color: '#000000', width: 6 }] } },
+    { name: '🎬 سينمائي راقي', style: { fontFamily: 'El Messiri', fontSize: 52, fontWeight: 600, letterSpacing: 4, position: 'bottom', animIn: 'fade', animInDur: 0.8, animOut: 'fadeOut', strokeOn: false, shadowOn: true, shadowBlur: 14, shadowDist: 2 } },
+    { name: '🤍 بسيط مينيمال', style: { fontFamily: 'Inter', fontSize: 54, fontWeight: 600, color: '#ffffff', strokeOn: true, strokes: [{ color: '#000000', width: 4 }], shadowOn: false, bgOn: false, animIn: 'fade', animOut: 'fadeOut' } }
   ],
 
   async renderPresets() {
     const wrap = $('#ed-presets');
     wrap.innerHTML = '';
+
+    // Reset button: remove active template and restore original default style
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'preset-chip !border-rose/50 !text-rose hover:!bg-rose/20 font-bold';
+    resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left ml-1"></i>الافتراضي (حذف القالب)';
+    resetBtn.title = 'إلغاء القالب والرجوع للتصميم الأصلي الافتراضي';
+    resetBtn.addEventListener('click', () => this.resetToDefaultStyle());
+    wrap.appendChild(resetBtn);
+
     for (const p of this.PRESETS) {
       const b = document.createElement('button');
       b.className = 'preset-chip'; b.textContent = p.name;
@@ -591,16 +611,32 @@ const Editor = {
     // saved templates
     const saved = await Store.listTemplates();
     for (const t of saved) {
+      const container = document.createElement('div');
+      container.className = 'inline-flex items-center rounded-lg border border-mint/40 bg-base-800 shrink-0 text-xs';
+
       const b = document.createElement('button');
-      b.className = 'preset-chip !border-mint/40'; b.innerHTML = `<i class="fa-solid fa-bookmark ml-1 text-mint"></i>${t.name}`;
+      b.className = 'px-2.5 py-1 text-white hover:text-mint transition flex items-center gap-1';
+      b.innerHTML = `<i class="fa-solid fa-bookmark text-mint text-[10px]"></i><span>${t.name}</span>`;
       b.addEventListener('click', () => {
         try { this.applyStyle(JSON.parse(t.style)); toast(`تم تطبيق ${t.name}`, 'ok'); } catch { toast('قالب تالف', 'err'); }
       });
-      b.addEventListener('contextmenu', async e => {
-        e.preventDefault();
-        if (confirm(`حذف القالب "${t.name}"؟`)) { await Store.deleteTemplate(t.id); this.renderPresets(); }
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'px-1.5 py-1 text-gray-500 hover:text-rose transition border-r border-base-700/50';
+      delBtn.title = 'حذف هذا القالب المحفوظ';
+      delBtn.innerHTML = '<i class="fa-solid fa-xmark text-[11px]"></i>';
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (confirm(`هل أنت متأكد من حذف القالب "${t.name}"؟`)) {
+          await Store.deleteTemplate(t.id);
+          this.renderPresets();
+          toast('تم حذف القالب ✔', 'ok');
+        }
       });
-      wrap.appendChild(b);
+
+      container.appendChild(b);
+      container.appendChild(delBtn);
+      wrap.appendChild(container);
     }
   },
 

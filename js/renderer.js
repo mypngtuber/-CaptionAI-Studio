@@ -55,10 +55,11 @@ const Renderer = {
     const S = W / 1080; // reference scale
     const fontPx = style.fontSize * S;
     const font = `${style.fontWeight} ${fontPx}px '${style.fontFamily}', 'Cairo', sans-serif`;
+    const isRtl = U.isRTL(displayText || cue.text);
     ctx.save();
     ctx.font = font;
     ctx.textBaseline = 'alphabetic';
-    ctx.direction = 'rtl';
+    ctx.direction = isRtl ? 'rtl' : 'ltr';
 
     // ----- animation progress -----
     const speed = style.animSpeed || 1;
@@ -148,17 +149,32 @@ const Renderer = {
     let y = topY + fontPx * 0.9;
     for (const line of lines) {
       let x;
-      if (style.align === 'center') x = cx + line.width / 2;
-      else if (style.align === 'right') x = cx + maxW / 2;
-      else x = cx - maxW / 2 + line.width;
-      // draw RTL: start from right edge of the line
+      if (isRtl) {
+        if (style.align === 'center') x = cx + line.width / 2;
+        else if (style.align === 'right') x = cx + maxW / 2;
+        else x = cx - maxW / 2 + line.width;
+      } else {
+        if (style.align === 'center') x = cx - line.width / 2;
+        else if (style.align === 'left') x = cx - maxW / 2;
+        else if (style.align === 'right') x = cx + maxW / 2 - line.width;
+        else x = cx - line.width / 2;
+      }
+
       for (const tok of line.tokens) {
         const isActive = tok.wordIdx === karaokeWordIdx && style.karaokeOn;
         const isSpoken = style.karaokeOn && words && tok.wordIdx >= 0 && tok.wordIdx <= karaokeWordIdx;
 
         // word-by-word: skip unspoken words
-        if (style.karaokeOn && words && (style.karaokeMode === 'word-by-word') && tok.wordIdx > karaokeWordIdx) { x -= tok.width + tok.space; continue; }
-        if (style.karaokeOn && words && style.karaokeMode === 'single-word' && !isActive) { x -= tok.width + tok.space; continue; }
+        if (style.karaokeOn && words && (style.karaokeMode === 'word-by-word') && tok.wordIdx > karaokeWordIdx) {
+          if (isRtl) x -= tok.width + tok.space;
+          else x += tok.width + tok.space;
+          continue;
+        }
+        if (style.karaokeOn && words && style.karaokeMode === 'single-word' && !isActive) {
+          if (isRtl) x -= tok.width + tok.space;
+          else x += tok.width + tok.space;
+          continue;
+        }
 
         let scale = 1;
         if (isActive && style.karaokeZoom) {
@@ -168,13 +184,13 @@ const Renderer = {
         }
 
         // token color
-        const stripped = tok.text.replace(/[.,،؟!:؛"'()\[\]{}]/g, '');
+        const stripped = tok.text.replace(/[.,،؟!:؛"'()[\]{}]/g, '');
         let fillColor = style.color;
         if (hlSet.has(stripped)) fillColor = style.hlColor;
         if (isActive) fillColor = style.karaokeColor;
 
         ctx.save();
-        const tokCx = x - tok.width / 2;
+        const tokCx = isRtl ? (x - tok.width / 2) : (x + tok.width / 2);
         if (scale !== 1) { ctx.translate(tokCx, y - fontPx * 0.35); ctx.scale(scale, scale); ctx.translate(-tokCx, -(y - fontPx * 0.35)); }
 
         // active word background pill
@@ -182,7 +198,8 @@ const Renderer = {
           const pad = fontPx * 0.18;
           ctx.save();
           ctx.fillStyle = style.karaokeBg;
-          this.roundRect(ctx, x - tok.width - pad, y - fontPx * 0.85, tok.width + pad * 2, fontPx * 1.15, fontPx * 0.22);
+          const pillX = isRtl ? (x - tok.width - pad) : (x - pad);
+          this.roundRect(ctx, pillX, y - fontPx * 0.85, tok.width + pad * 2, fontPx * 1.15, fontPx * 0.22);
           ctx.fill();
           ctx.restore();
         }
@@ -191,15 +208,15 @@ const Renderer = {
         if (style.shadowOn) {
           ctx.shadowColor = U.hexWithAlpha(style.shadowColor, style.shadowOpacity);
           ctx.shadowBlur = style.shadowBlur * S;
-          ctx.shadowOffsetX = -style.shadowDist * S * 0.7;
+          ctx.shadowOffsetX = (isRtl ? -1 : 1) * style.shadowDist * S * 0.7;
           ctx.shadowOffsetY = style.shadowDist * S;
         }
 
         ctx.font = font;
-        if (style.letterSpacing) ctx.letterSpacing = `${style.letterSpacing * S}px`;
+        if (style.letterSpacing) ctx.letterSpacing = (style.letterSpacing * S) + 'px';
 
         // strokes (multi-layer, thickest first)
-        if (style.strokeOn && style.strokes?.length) {
+        if (style.strokeOn && style.strokes && style.strokes.length) {
           const sorted = [...style.strokes].sort((a, b) => b.width - a.width);
           for (const st of sorted) {
             if (st.width <= 0) continue;
@@ -212,7 +229,7 @@ const Renderer = {
 
         // fill (gradient / solid)
         if (style.gradientOn && !isActive && !hlSet.has(stripped)) {
-          const g = ctx.createLinearGradient(x - tok.width, y - fontPx, x, y);
+          const g = isRtl ? ctx.createLinearGradient(x - tok.width, y - fontPx, x, y) : ctx.createLinearGradient(x, y - fontPx, x + tok.width, y);
           g.addColorStop(0, style.grad1); g.addColorStop(1, style.grad2);
           ctx.fillStyle = g;
         } else {
@@ -227,7 +244,11 @@ const Renderer = {
         ctx.fillText(tok.text, x, y);
         ctx.restore();
 
-        x -= tok.width + tok.space;
+        if (isRtl) {
+          x -= tok.width + tok.space;
+        } else {
+          x += tok.width + tok.space;
+        }
       }
       y += lineH;
     }

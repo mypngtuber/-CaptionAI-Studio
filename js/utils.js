@@ -5,6 +5,16 @@ const U = {
   uid: () => 'c' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
   clamp: (v, a, b) => Math.max(a, Math.min(b, v)),
 
+  isRTL(text) {
+    if (!text) return true;
+    const arabicMatch = text.match(/[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/g);
+    const latinMatch = text.match(/[A-Za-z]/g);
+    const arCount = arabicMatch ? arabicMatch.length : 0;
+    const latCount = latinMatch ? latinMatch.length : 0;
+    if (arCount === 0 && latCount > 0) return false;
+    return arCount >= latCount;
+  },
+
   fmtTime(s, withMs = true) {
     if (!isFinite(s) || s < 0) s = 0;
     const m = Math.floor(s / 60), sec = s % 60;
