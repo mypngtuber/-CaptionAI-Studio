@@ -7,6 +7,10 @@ const Editor = {
   cues: [],
   style: DEFAULT_STYLE(),
   activeCueId: null,
+  activeTemplate: null, // { id, name, originalStyle }; persisted with the project
+  _presetRender: 0,
+  _styleRevision: 0,
+  _playRevision: 0,
 
   video: null,          // HTMLVideoElement (offscreen)
   videoURL: null,
@@ -30,7 +34,13 @@ const Editor = {
       $('#ed-no-video').classList.add('hidden');
       this.resizeCanvas(); this.renderTimeline(); this.renderFrame();
     });
+    this.video.addEventListener('loadeddata', () => this.renderFrame());
+    this.video.addEventListener('seeked', () => this.renderFrame());
     this.video.addEventListener('ended', () => this.pause());
+    this.video.addEventListener('error', () => {
+      this.pause();
+      toast('تعذر تشغيل الفيديو — جرّب ملف MP4 أو WebM صالحاً', 'err');
+    });
 
     // transport
     $('#ed-play').addEventListener('click', () => this.playing ? this.pause() : this.play());
@@ -64,6 +74,11 @@ const Editor = {
     this.bindStyleControls();
     this.renderStrokeLayers();
     this.renderPresets();
+    $('#ed-template-remove').addEventListener('click', () => this.removeActiveTemplate());
+    $('#ed-style-reset').addEventListener('click', () => this.resetToDefaultStyle());
+    $('#ed-presets-restore').addEventListener('click', () => {
+      if (this.saveHiddenPresets([])) this.renderPresets();
+    });
 
     // toolbar
     $('#ed-project-name').addEventListener('input', e => { this.projectName = e.target.value; this.autosave(); });
@@ -93,6 +108,8 @@ const Editor = {
 
   // ---------- Video ----------
   loadVideoFile(file) {
+    this.pause();
+    this.time = 0;
     if (this.videoURL) URL.revokeObjectURL(this.videoURL);
     this.videoURL = URL.createObjectURL(file);
     this.video.src = this.videoURL;
@@ -114,9 +131,11 @@ const Editor = {
 
   resizeCanvas() {
     const { w, h } = this.targetSize();
-    this.canvas.width = w; this.canvas.height = h;
+    // Preview is bounded; exports still use targetSize() at full resolution.
+    const previewScale = Math.min(1, 1280 / Math.max(w, h));
+    this.canvas.width = Math.round(w * previewScale); this.canvas.height = Math.round(h * previewScale);
     const wrap = $('#ed-canvas-wrap');
-    const availW = wrap.clientWidth - 32, availH = wrap.clientHeight - 32;
+    const availW = Math.max(1, wrap.clientWidth - 32), availH = Math.max(1, wrap.clientHeight - 32);
     const scale = Math.min(availW / w, availH / h, 1);
     this.canvas.style.width = (w * scale) + 'px';
     this.canvas.style.height = (h * scale) + 'px';
@@ -124,9 +143,19 @@ const Editor = {
 
   // ---------- Playback ----------
   play() {
+    if (this.playing) return;
+    if (this.time >= this.duration - 0.05) this.time = 0;
+    const revision = ++this._playRevision;
     this.playing = true;
     $('#ed-play-icon').className = 'fa-solid fa-pause';
-    if (this.hasVideo()) { this.video.currentTime = this.time; this.video.play().catch(() => {}); }
+    if (this.hasVideo()) {
+      this.video.currentTime = this.time;
+      this.video.play().catch(error => {
+        if (revision !== this._playRevision) return;
+        this.pause();
+        if (error.name !== 'AbortError') toast('تعذر بدء المعاينة — اضغط تشغيل للمحاولة مجدداً', 'err');
+      });
+    }
     this._lastTick = performance.now();
     const loop = (now) => {
       if (!this.playing) return;
@@ -136,13 +165,21 @@ const Editor = {
         if (this.time >= this.duration) { this.time = 0; }
       }
       this._lastTick = now;
-      this.renderFrame(); this.updatePlayhead();
+      try {
+        this.renderFrame(); this.updatePlayhead();
+      } catch (error) {
+        console.error('Preview render failed', error);
+        this.pause();
+        toast('تعذر رسم التصميم — أزل القالب أو ارجع للتصميم الافتراضي', 'err');
+        return;
+      }
       this._raf = requestAnimationFrame(loop);
     };
     this._raf = requestAnimationFrame(loop);
   },
 
   pause() {
+    ++this._playRevision;
     this.playing = false;
     $('#ed-play-icon').className = 'fa-solid fa-play';
     if (this.hasVideo()) this.video.pause();
@@ -215,7 +252,7 @@ const Editor = {
           <span class="cue-time">${U.fmtTime(c.start)} → ${U.fmtTime(c.end)}</span>
           <button class="cue-del text-gray-600 hover:text-rose text-[10px]"><i class="fa-solid fa-trash"></i></button>
         </div>
-        <textarea class="cue-text" rows="1">${c.text.replace(/</g, '&lt;')}</textarea>`;
+        <textarea class="cue-text" dir="auto" rows="1">${c.text.replace(/</g, '&lt;')}</textarea>`;
       div.dataset.id = c.id;
       div.addEventListener('click', e => {
         if (e.target.closest('.cue-del')) return;
@@ -525,20 +562,53 @@ const Editor = {
     });
   },
 
-  applyStyle(style) {
-    this.style = { ...DEFAULT_STYLE(), ...style };
-    if (!Array.isArray(this.style.strokes) || !this.style.strokes.length) this.style.strokes = [{ color: '#000000', width: 6 }];
+  applyStyle(style, template = null) {
+    const next = Renderer.normalizeStyle(style);
+    if (template) {
+      const originalStyle = this.activeTemplate?.originalStyle || Renderer.normalizeStyle(this.style);
+      this.activeTemplate = { id: template.id, name: template.name, originalStyle };
+    } else this.activeTemplate = null;
+    this.style = next; // independent copy; edits cannot mutate built-in or saved templates
+    this.ensureAllWords();
+    const revision = ++this._styleRevision;
     this.syncControlsFromStyle();
+    this.syncTemplateControls();
     this.renderFrame();
     Fonts.ensureLoaded(this.style.fontFamily, this.style.fontWeight).then(() => {
-      this.renderFrame();
+      if (revision === this._styleRevision) this.renderFrame();
     });
     this.autosaveDebounced();
   },
 
+  restoreTemplateState(template) {
+    if (template && typeof template.id === 'string' && typeof template.name === 'string') {
+      try {
+        this.activeTemplate = { id: template.id, name: template.name,
+          originalStyle: Renderer.normalizeStyle(template.originalStyle) };
+      } catch { this.activeTemplate = null; }
+    }
+    this.syncTemplateControls();
+  },
+
+  removeActiveTemplate() {
+    if (!this.activeTemplate) return;
+    this.applyStyle(this.activeTemplate.originalStyle);
+    toast('تمت إزالة القالب والرجوع لتصميمك السابق', 'ok');
+  },
+
   resetToDefaultStyle() {
     this.applyStyle(DEFAULT_STYLE());
-    toast('تمت إزالة القالب والرجوع للتصميم الافتراضي ✔', 'ok');
+    toast('تم الرجوع للتصميم الافتراضي', 'ok');
+  },
+
+  syncTemplateControls() {
+    $('#ed-template-remove').disabled = !this.activeTemplate;
+    $('#ed-template-status').textContent = this.activeTemplate ? `القالب: ${this.activeTemplate.name}` : 'بدون قالب';
+    $$('#ed-presets [data-template-id]').forEach(button => {
+      const active = button.dataset.templateId === this.activeTemplate?.id;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
   },
 
   syncControlsFromStyle() {
@@ -556,6 +626,7 @@ const Editor = {
     set('st-shadowBlur', s.shadowBlur); set('st-shadowDist', s.shadowDist); set('st-shadowOpacity', Math.round(s.shadowOpacity * 100));
     setChk('st-bgOn', s.bgOn); set('st-bgColor', s.bgColor); set('st-bgOpacity', Math.round(s.bgOpacity * 100));
     set('st-bgRadius', s.bgRadius); set('st-bgPadding', s.bgPadding);
+    set('st-bgGrad1', s.bgGrad1); set('st-bgGrad2', s.bgGrad2);
     setChk('st-bgGradient', s.bgGradient); setChk('st-bgBlur', s.bgBlur);
     $('#st-bggrad-row').classList.toggle('hidden', !s.bgGradient);
     set('st-hlWords', s.hlWords); set('st-hlColor', s.hlColor);
@@ -566,6 +637,13 @@ const Editor = {
     set('st-karaokeColor', s.karaokeColor); set('st-karaokeBg', s.karaokeBg);
     setChk('st-karaokeBgOn', s.karaokeBgOn); setChk('st-karaokeZoom', s.karaokeZoom);
     set('st-karaokeScale', s.karaokeScale);
+    // Keep all slider labels consistent after switching/resetting templates.
+    for (const key of ['shadowBlur', 'shadowDist', 'bgRadius', 'bgPadding', 'karaokeScale']) {
+      $('#v-' + key).textContent = s[key];
+    }
+    for (const key of ['shadowOpacity', 'bgOpacity']) $('#v-' + key).textContent = Math.round(s[key] * 100) + '%';
+    for (const key of ['animInDur', 'animOutDur', 'animDelay']) $('#v-' + key).textContent = s[key] + 's';
+    $('#v-animSpeed').textContent = s.animSpeed + 'x';
     // labels
     $('#v-fontSize').textContent = s.fontSize; $('#v-letterSpacing').textContent = s.letterSpacing;
     $('#v-lineHeight').textContent = s.lineHeight; $('#v-rotation').textContent = s.rotation + '°';
@@ -577,75 +655,96 @@ const Editor = {
 
   // ---------- Presets ----------
   PRESETS: [
-    { name: '🔥 تيك توك / ريلز', style: { fontFamily: 'Cairo', fontSize: 72, fontWeight: 900, strokes: [{ color: '#000000', width: 8 }], karaokeOn: true, karaokeMode: 'highlight', karaokeColor: '#ffd23f', karaokeZoom: true, animIn: 'pop', animOut: 'fadeOut', shadowOn: true, shadowBlur: 12 } },
-    { name: '⚡ هورموزي (Hormozi)', style: { fontFamily: 'Montserrat', fontSize: 76, fontWeight: 900, color: '#ffffff', strokes: [{ color: '#000000', width: 12 }], karaokeOn: true, karaokeMode: 'highlight', karaokeColor: '#00ff66', karaokeBg: '#000000', karaokeBgOn: true, karaokeZoom: true, karaokeScale: 1.2, animIn: 'pop', animOut: 'none' } },
-    { name: '🏆 مستر بيست (MrBeast)', style: { fontFamily: 'Montserrat', fontSize: 74, fontWeight: 900, color: '#ffffff', strokes: [{ color: '#000000', width: 10 }], shadowOn: true, shadowColor: '#000000', shadowBlur: 16, shadowDist: 6, karaokeOn: true, karaokeMode: 'single-word', karaokeColor: '#ffe600', karaokeZoom: true, karaokeScale: 1.25, animIn: 'bounce' } },
-    { name: '📰 وثائقي فوكس (Vox)', style: { fontFamily: 'IBM Plex Sans Arabic', fontSize: 60, fontWeight: 700, color: '#ffffff', bgOn: true, bgColor: '#ffcc00', bgOpacity: 0.95, bgRadius: 6, bgPadding: 14, strokeOn: false, shadowOn: false, animIn: 'slideUp', animOut: 'fadeOut' } },
-    { name: '💜 نيون سايبر', style: { fontFamily: 'Changa', fontSize: 66, fontWeight: 800, color: '#ffffff', strokes: [{ color: '#7c6cff', width: 10 }, { color: '#2a1a6e', width: 20 }], shadowOn: true, shadowColor: '#7c6cff', shadowBlur: 30, shadowDist: 0, animIn: 'zoom' } },
-    { name: '📦 صندوق عصري', style: { fontFamily: 'Tajawal', fontSize: 56, fontWeight: 700, bgOn: true, bgColor: '#11111a', bgOpacity: 0.85, bgRadius: 16, bgPadding: 20, strokeOn: false, shadowOn: false, animIn: 'slideUp' } },
-    { name: '🌈 تدرج ديناميكي', style: { fontFamily: 'Almarai', fontSize: 70, fontWeight: 800, gradientOn: true, grad1: '#ff5c7a', grad2: '#7c6cff', strokes: [{ color: '#ffffff', width: 3 }], animIn: 'bounce' } },
-    { name: '✍️ آلة كاتبة', style: { fontFamily: 'Amiri', fontSize: 60, fontWeight: 700, animIn: 'typing', animInDur: 1.2, strokeOn: false, shadowOn: true, shadowBlur: 6 } },
-    { name: '⚡ جليتش حماسي', style: { fontFamily: 'Noto Kufi Arabic', fontSize: 64, fontWeight: 900, animIn: 'glitch', color: '#3ddc97', strokes: [{ color: '#000000', width: 6 }] } },
-    { name: '🎬 سينمائي راقي', style: { fontFamily: 'El Messiri', fontSize: 52, fontWeight: 600, letterSpacing: 4, position: 'bottom', animIn: 'fade', animInDur: 0.8, animOut: 'fadeOut', strokeOn: false, shadowOn: true, shadowBlur: 14, shadowDist: 2 } },
-    { name: '🤍 بسيط مينيمال', style: { fontFamily: 'Inter', fontSize: 54, fontWeight: 600, color: '#ffffff', strokeOn: true, strokes: [{ color: '#000000', width: 4 }], shadowOn: false, bgOn: false, animIn: 'fade', animOut: 'fadeOut' } }
+    { id: 'tiktok', name: 'تيك توك / ريلز', style: { fontFamily: 'Cairo', fontSize: 72, fontWeight: 900, strokes: [{ color: '#000000', width: 8 }], karaokeOn: true, karaokeMode: 'highlight', karaokeColor: '#ffd23f', karaokeZoom: true, animIn: 'pop', animOut: 'fadeOut', shadowOn: true, shadowBlur: 12 } },
+    { id: 'hormozi', name: 'هورموزي (Hormozi)', style: { fontFamily: 'Montserrat', fontSize: 76, fontWeight: 900, color: '#ffffff', strokes: [{ color: '#000000', width: 12 }], karaokeOn: true, karaokeMode: 'highlight', karaokeColor: '#00ff66', karaokeBg: '#000000', karaokeBgOn: true, karaokeZoom: true, karaokeScale: 1.2, animIn: 'pop', animOut: 'none' } },
+    { id: 'mrbeast', name: 'مستر بيست (MrBeast)', style: { fontFamily: 'Montserrat', fontSize: 74, fontWeight: 900, color: '#ffffff', strokes: [{ color: '#000000', width: 10 }], shadowOn: true, shadowColor: '#000000', shadowBlur: 16, shadowDist: 6, karaokeOn: true, karaokeMode: 'single-word', karaokeColor: '#ffe600', karaokeZoom: true, karaokeScale: 1.25, animIn: 'bounce' } },
+    { id: 'vox', name: 'وثائقي فوكس (Vox)', style: { fontFamily: 'IBM Plex Sans Arabic', fontSize: 60, fontWeight: 700, color: '#171717', bgOn: true, bgColor: '#ffcc00', bgOpacity: 0.95, bgRadius: 6, bgPadding: 14, strokeOn: false, shadowOn: false, animIn: 'slideUp', animOut: 'fadeOut' } },
+    { id: 'neon', name: 'نيون سايبر', style: { fontFamily: 'Changa', fontSize: 66, fontWeight: 800, color: '#ffffff', strokes: [{ color: '#7c6cff', width: 10 }, { color: '#2a1a6e', width: 20 }], shadowOn: true, shadowColor: '#7c6cff', shadowBlur: 30, shadowDist: 0, animIn: 'zoom' } },
+    { id: 'box', name: 'صندوق عصري', style: { fontFamily: 'Tajawal', fontSize: 56, fontWeight: 700, bgOn: true, bgColor: '#11111a', bgOpacity: 0.85, bgRadius: 16, bgPadding: 20, strokeOn: false, shadowOn: false, animIn: 'slideUp' } },
+    { id: 'gradient', name: 'تدرج ديناميكي', style: { fontFamily: 'Almarai', fontSize: 70, fontWeight: 800, gradientOn: true, grad1: '#ff5c7a', grad2: '#7c6cff', strokes: [{ color: '#ffffff', width: 3 }], animIn: 'bounce' } },
+    { id: 'typewriter', name: 'آلة كاتبة', style: { fontFamily: 'Amiri', fontSize: 60, fontWeight: 700, animIn: 'typing', animInDur: 1.2, strokeOn: false, shadowOn: true, shadowBlur: 6 } },
+    { id: 'glitch', name: 'جليتش حماسي', style: { fontFamily: 'Noto Kufi Arabic', fontSize: 64, fontWeight: 900, animIn: 'glitch', color: '#3ddc97', strokes: [{ color: '#000000', width: 6 }] } },
+    { id: 'cinematic', name: 'سينمائي راقي', style: { fontFamily: 'El Messiri', fontSize: 52, fontWeight: 600, letterSpacing: 4, position: 'bottom', animIn: 'fade', animInDur: 0.8, animOut: 'fadeOut', strokeOn: false, shadowOn: true, shadowBlur: 14, shadowDist: 2 } },
+    { id: 'minimal', name: 'بسيط مينيمال', style: { fontFamily: 'Inter', fontSize: 54, fontWeight: 600, color: '#ffffff', strokeOn: true, strokes: [{ color: '#000000', width: 4 }], shadowOn: false, bgOn: false, animIn: 'fade', animOut: 'fadeOut' } },
+    { id: 'podcast', name: 'بودكاست', style: { fontFamily: 'Tajawal', fontSize: 58, fontWeight: 700, bgOn: true, bgColor: '#101018', bgOpacity: 0.85, strokeOn: false, shadowOn: false, animIn: 'fade', karaokeOn: true, karaokeColor: '#ffb545', karaokeZoom: false } },
+    { id: 'shorts', name: 'يوتيوب شورتس', style: { fontFamily: 'Cairo', fontSize: 78, fontWeight: 900, color: '#ffd23f', strokes: [{ color: '#000000', width: 10 }], animIn: 'pop', karaokeOn: true, karaokeColor: '#ffffff', karaokeZoom: true } },
+    { id: 'capcut', name: 'كاب كات — كلمة كلمة', style: { fontFamily: 'Cairo', fontSize: 68, fontWeight: 900, animIn: 'none', karaokeOn: true, karaokeMode: 'word-by-word', karaokeColor: '#ffffff', karaokeBgOn: true, karaokeBg: '#7c6cff', karaokeZoom: false } }
   ],
 
-  async renderPresets() {
-    const wrap = $('#ed-presets');
-    wrap.innerHTML = '';
+  hiddenPresets() {
+    try {
+      const ids = JSON.parse(localStorage.getItem('capai_hidden_presets_v1') || '[]');
+      return Array.isArray(ids) ? ids.filter(id => typeof id === 'string') : [];
+    } catch { return []; }
+  },
 
-    // Reset button: remove active template and restore original default style
-    const resetBtn = document.createElement('button');
-    resetBtn.className = 'preset-chip !border-rose/50 !text-rose hover:!bg-rose/20 font-bold';
-    resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left ml-1"></i>الافتراضي (حذف القالب)';
-    resetBtn.title = 'إلغاء القالب والرجوع للتصميم الأصلي الافتراضي';
-    resetBtn.addEventListener('click', () => this.resetToDefaultStyle());
-    wrap.appendChild(resetBtn);
+  saveHiddenPresets(ids) {
+    try { localStorage.setItem('capai_hidden_presets_v1', JSON.stringify(ids)); return true; }
+    catch { toast('تعذر حفظ تغييرات القوالب على الجهاز', 'err'); return false; }
+  },
+
+  async renderPresets() {
+    const revision = ++this._presetRender;
+    const wrap = $('#ed-presets');
+    wrap.replaceChildren();
+    const hidden = this.hiddenPresets();
+    $('#ed-presets-restore').classList.toggle('hidden', !hidden.length);
+
+    const addTemplate = (id, name, getStyle, remove, saved = false) => {
+      const container = document.createElement('div');
+      container.className = 'preset-item';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'preset-chip';
+      button.dataset.templateId = id;
+      button.textContent = name; // template names are untrusted, never HTML
+      button.title = saved ? `قالب محفوظ: ${name}` : `تصميم مستوحى من ${name}`;
+      button.addEventListener('click', () => {
+        try { this.applyStyle(getStyle(), { id, name }); toast(`تم تطبيق ${name}`, 'ok'); }
+        catch { toast('قالب تالف — لم يتم تغيير التصميم الحالي', 'err'); }
+      });
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'preset-delete';
+      del.textContent = '×';
+      del.title = `حذف القالب: ${name}`;
+      del.setAttribute('aria-label', del.title);
+      del.addEventListener('click', async () => {
+        if (!confirm(saved ? `حذف القالب المحفوظ "${name}" نهائياً؟` : `حذف "${name}" من القائمة؟ يمكنك استعادته من زر استعادة القوالب الجاهزة.`)) return;
+        del.disabled = true;
+        try {
+          if (!await remove()) throw new Error('Delete failed');
+          if (this.activeTemplate?.id === id) this.removeActiveTemplate();
+          await this.renderPresets();
+          toast('تم حذف القالب', 'ok');
+        } catch { del.disabled = false; toast('تعذر حذف القالب — حاول مرة أخرى', 'err'); }
+      });
+      container.append(button, del);
+      wrap.appendChild(container);
+    };
 
     for (const p of this.PRESETS) {
-      const b = document.createElement('button');
-      b.className = 'preset-chip'; b.textContent = p.name;
-      b.addEventListener('click', () => { this.applyStyle({ ...DEFAULT_STYLE(), ...p.style }); toast(`تم تطبيق قالب ${p.name}`, 'ok'); });
-      wrap.appendChild(b);
+      if (!hidden.includes(p.id)) addTemplate('preset:' + p.id, p.name, () => p.style,
+        () => this.saveHiddenPresets([...new Set([...this.hiddenPresets(), p.id])]));
     }
-    // saved templates
+    this.syncTemplateControls();
     const saved = await Store.listTemplates();
+    if (revision !== this._presetRender) return; // stale requests must not duplicate chips
     for (const t of saved) {
-      const container = document.createElement('div');
-      container.className = 'inline-flex items-center rounded-lg border border-mint/40 bg-base-800 shrink-0 text-xs';
-
-      const b = document.createElement('button');
-      b.className = 'px-2.5 py-1 text-white hover:text-mint transition flex items-center gap-1';
-      b.innerHTML = `<i class="fa-solid fa-bookmark text-mint text-[10px]"></i><span>${t.name}</span>`;
-      b.addEventListener('click', () => {
-        try { this.applyStyle(JSON.parse(t.style)); toast(`تم تطبيق ${t.name}`, 'ok'); } catch { toast('قالب تالف', 'err'); }
-      });
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'px-1.5 py-1 text-gray-500 hover:text-rose transition border-r border-base-700/50';
-      delBtn.title = 'حذف هذا القالب المحفوظ';
-      delBtn.innerHTML = '<i class="fa-solid fa-xmark text-[11px]"></i>';
-      delBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (confirm(`هل أنت متأكد من حذف القالب "${t.name}"؟`)) {
-          await Store.deleteTemplate(t.id);
-          this.renderPresets();
-          toast('تم حذف القالب ✔', 'ok');
-        }
-      });
-
-      container.appendChild(b);
-      container.appendChild(delBtn);
-      wrap.appendChild(container);
+      addTemplate('saved:' + t.id, t.name,
+        () => typeof t.style === 'string' ? JSON.parse(t.style) : t.style,
+        () => Store.deleteTemplate(t.id), true);
     }
+    this.syncTemplateControls();
   },
 
   async saveAsTemplate() {
-    const name = prompt('اسم القالب:', 'قالبي ' + new Date().toLocaleDateString('ar'));
+    const name = prompt('اسم القالب:', 'قالبي ' + new Date().toLocaleDateString('ar'))?.trim();
     if (!name) return;
-    await Store.saveTemplate({ id: U.uid(), name, style: JSON.stringify(this.style), created: Date.now() });
-    this.renderPresets();
-    toast('تم حفظ القالب ✔ (اضغط بزر الفأرة الأيمن على القالب لحذفه)', 'ok', 4500);
+    const ok = await Store.saveTemplate({ id: U.uid(), name, style: JSON.stringify(this.style), created: Date.now() });
+    if (!ok) { toast('تعذر حفظ القالب', 'err'); return; }
+    await this.renderPresets();
+    toast('تم حفظ القالب — استخدم زر الحذف بجواره لإزالته', 'ok');
   },
 
   // ---------- Autosave ----------
@@ -657,7 +756,7 @@ const Editor = {
       id: this.projectId,
       name: this.projectName || 'مشروع بدون اسم',
       kind: 'caption',
-      data: JSON.stringify({ cues: this.cues, style: this.style }),
+      data: JSON.stringify({ cues: this.cues, style: this.style, template: this.activeTemplate }),
       thumb: '',
       updated: Date.now()
     }).then(ok => {
@@ -674,7 +773,9 @@ const Editor = {
     try {
       const d = JSON.parse(p.data || '{}');
       this.cues = d.cues || [];
-      if (d.style) this.applyStyle(d.style);
+      this.ensureAllWords();
+      this.applyStyle(d.style || DEFAULT_STYLE());
+      this.restoreTemplateState(d.template);
       if (!this.hasVideo() && this.cues.length) this.duration = Math.max(...this.cues.map(c => c.end)) + 1;
       this.activeCueId = this.cues[0]?.id || null;
       this.renderCueList(); this.renderTimeline(); this.renderFrame();

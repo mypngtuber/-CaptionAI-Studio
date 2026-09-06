@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Tajawal:wght@300;400;500;700;900&family=Almarai:wght@300;400;700;800&family=Changa:wght@300;400;600;800&family=El+Messiri:wght@400;600;700&family=Amiri:ital,wght@0,400;0,700;1,400&family=Reem+Kufi:wght@400;600;700&family=Lalezar&family=Noto+Kufi+Arabic:wght@300;400;700;900&family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&family=Inter:wght@300;400;600;800&family=Montserrat:wght@400;700;900&family=Bebas+Neue&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <link rel="stylesheet" href="css/style.css">
 <script>
 tailwind.config = {
@@ -44,7 +43,7 @@ tailwind.config = {
       <button data-page="dashboard" class="nav-btn active"><i class="fa-solid fa-house w-5"></i> لوحة التحكم</button>
       <button data-page="generator" class="nav-btn"><i class="fa-solid fa-wand-magic-sparkles w-5"></i> استخراج الكابشن</button>
       <button data-page="editor" class="nav-btn"><i class="fa-solid fa-pen-ruler w-5"></i> محرر الكابشن</button>
-      
+
       <button data-page="settings" class="nav-btn"><i class="fa-solid fa-gear w-5"></i> الإعدادات</button>
     </nav>
 
@@ -398,7 +397,7 @@ tailwind.config = {
             <div class="style-panel" data-panel="karaoke">
               <div class="space-y-4">
                 <label class="check-label font-bold"><input type="checkbox" id="st-karaokeOn" class="check"> تفعيل Word Highlight</label>
-                <p class="text-[10px] text-gray-500">نظام كابشن ديناميكي مثل TikTok — يتطلب توقيت كلمات (Word-level) من الاستخراج</p>
+                <p class="text-[10px] text-gray-500">توقيت الكلمات يُجهّز تلقائياً للكابشن المستورد، ويستخدم التوقيت الأصلي إن كان متاحاً.</p>
                 <label class="field-label">نمط العرض
                   <select id="st-karaokeMode" class="field">
                     <option value="highlight">تلوين الكلمة المنطوقة</option>
@@ -419,14 +418,20 @@ tailwind.config = {
 
           <!-- Templates strip -->
           <div class="border-t border-base-700/50 p-2">
-            <p class="text-[10px] text-gray-500 mb-1.5 px-1">قوالب جاهزة</p>
-            <div id="ed-presets" class="flex gap-1.5 overflow-x-auto pb-1"></div>
+            <div class="flex flex-wrap gap-1.5 mb-2">
+              <button id="ed-template-remove" class="toolbar-btn" disabled>إزالة القالب / الرجوع للأصلي</button>
+              <button id="ed-style-reset" class="toolbar-btn">التصميم الافتراضي</button>
+              <button id="ed-presets-restore" class="toolbar-btn hidden">استعادة القوالب الجاهزة</button>
+            </div>
+            <p id="ed-template-status" class="text-[10px] text-gray-400 mb-1" role="status">بدون قالب</p>
+            <p class="text-[10px] text-gray-500 mb-1.5">قوالب مستوحاة من الأنماط الشائعة — زر × يحذف القالب من القائمة</p>
+            <div id="ed-presets" class="flex flex-wrap gap-1.5 overflow-y-auto max-h-44 pb-1"></div>
           </div>
         </div>
       </div>
     </section>
 
-    
+
 
     <!-- ============ PAGE: Settings ============ -->
     <section id="page-settings" class="page overflow-y-auto p-6">

@@ -124,26 +124,10 @@ html.light .field { background: #f6f7fb; color: #111; border-color: #d8dbe8; }
 }
 .export-btn:hover { border-color: #7c6cff; color: #7c6cff; }
 
-.gs-export-btn {
-  display: block; width: 100%; text-align: right; padding: 10px 12px; border-radius: 10px;
-  background: #1a1a28; font-size: 12px; font-weight: 700; color: #e5e7eb;
-  border: 1px solid rgba(80,80,120,.3); transition: all .15s;
-}
-.gs-export-btn:hover:not(:disabled) { border-color: #3ddc97; }
-.gs-export-btn:disabled { opacity: .4; cursor: not-allowed; }
-
 /* ---- Result rows ---- */
 .res-cue { background: #1a1a28; border-radius: 10px; padding: 8px 12px; }
 .res-cue .rc-time { font-size: 9.5px; color: #7c6cff; font-family: monospace; direction: ltr; text-align: right; }
 .res-cue .rc-text { font-size: 13px; color: #e5e7eb; margin-top: 2px; }
-
-/* ---- Checker background (transparency) ---- */
-.checker {
-  background-image: linear-gradient(45deg, #2a2a3a 25%, transparent 25%), linear-gradient(-45deg, #2a2a3a 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #2a2a3a 75%), linear-gradient(-45deg, transparent 75%, #2a2a3a 75%);
-  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-  background-color: #1a1a24;
-}
 
 /* ---- Modal ---- */
 .modal { position: fixed; inset: 0; z-index: 90; background: rgba(5,5,10,.75); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -173,6 +157,13 @@ html.light .field { background: #f6f7fb; color: #111; border-color: #d8dbe8; }
   cursor: pointer; transition: all .15s; white-space: nowrap;
 }
 .preset-chip:hover { border-color: #7c6cff; transform: translateY(-1px); }
+.preset-chip.active { border-color: #7c6cff; background: #393062; }
+.preset-item { display: flex; align-items: stretch; max-width: 100%; }
+.preset-item .preset-chip { border-radius: 0 10px 10px 0; white-space: normal; flex-shrink: 1; }
+.preset-delete { padding: 6px 10px; background: #252538; color: #fda4af; border-radius: 10px 0 0 10px; }
+.preset-delete:hover { background: #562535; }
+.preset-chip:focus-visible, .preset-delete:focus-visible, .toolbar-btn:focus-visible { outline: 2px solid #7c6cff; outline-offset: 2px; }
+.toolbar-btn:disabled, .preset-delete:disabled { opacity: .4; cursor: not-allowed; }
 
 /* ---- Stroke layer row ---- */
 .stroke-layer { display: flex; align-items: center; gap: 8px; background: #1a1a28; border-radius: 8px; padding: 6px 8px; }
