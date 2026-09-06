@@ -81,31 +81,66 @@ const Store = {
   },
 
   // ---------- Templates ----------
+  localTemplates() {
+    try {
+      const templates = JSON.parse(localStorage.getItem(this._tplKey) || '[]');
+      return Array.isArray(templates) ? templates.filter(t => t && typeof t.id === 'string' && typeof t.name === 'string') : [];
+    } catch { return []; }
+  },
+
+  async templateRequest(path, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try { return await fetch(path, { ...options, signal: controller.signal }); }
+    finally { clearTimeout(timer); }
+  },
+
   async listTemplates() {
+    const local = this.localTemplates();
     if (this.apiOk) {
-      try { const r = await fetch('tables/templates?limit=50'); if (r.ok) { const j = await r.json(); return (j.data || []).filter(t => !t.deleted); } } catch { this.apiOk = false; }
+      try {
+        const r = await this.templateRequest('tables/templates?limit=50');
+        if (r.ok) {
+          const j = await r.json();
+          if (!Array.isArray(j.data)) throw new Error('Invalid template response');
+          const remote = j.data.filter(t => t && !t.deleted && typeof t.id === 'string' && typeof t.name === 'string');
+          return [...remote, ...local.filter(t => !remote.some(r => r.id === t.id))];
+        }
+        this.apiOk = false;
+      } catch { this.apiOk = false; }
     }
-    try { return JSON.parse(localStorage.getItem(this._tplKey) || '[]'); } catch { return []; }
+    return local;
   },
 
   async saveTemplate(t) {
     if (this.apiOk) {
-      try { const r = await fetch('tables/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) }); if (r.ok) return true; } catch { this.apiOk = false; }
+      try {
+        const r = await this.templateRequest('tables/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) });
+        if (r.ok) return true;
+        this.apiOk = false;
+      } catch { this.apiOk = false; }
     }
     try {
-      const arr = JSON.parse(localStorage.getItem(this._tplKey) || '[]');
+      const arr = this.localTemplates().filter(x => x.id !== t.id);
       arr.push(t); localStorage.setItem(this._tplKey, JSON.stringify(arr.slice(-40)));
       return true;
     } catch { return false; }
   },
 
   async deleteTemplate(id) {
+    const local = this.localTemplates();
+    const isLocal = local.some(t => t.id === id);
     if (this.apiOk) {
-      try { const r = await fetch(`tables/templates/${id}`, { method: 'DELETE' }); if (r.ok || r.status === 204) return true; } catch { this.apiOk = false; }
+      try {
+        const r = await this.templateRequest(`tables/templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (!r.ok && r.status !== 404) return false;
+      } catch { return false; }
+    } else if (!isLocal) {
+      // Never report success for a remote template we could not actually delete.
+      return false;
     }
     try {
-      const arr = JSON.parse(localStorage.getItem(this._tplKey) || '[]').filter(x => x.id !== id);
-      localStorage.setItem(this._tplKey, JSON.stringify(arr));
+      localStorage.setItem(this._tplKey, JSON.stringify(local.filter(x => x.id !== id)));
       return true;
     } catch { return false; }
   }

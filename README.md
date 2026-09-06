@@ -24,24 +24,20 @@
 - **Animations دخول**: Pop, Typing, Fade, Slide Up/Down, Zoom, Bounce, Glitch, Shake
 - **Animations خروج**: Fade Out, Zoom Out, Slide, Blur — مع تحكم بالمدة والتأخير والسرعة
 - **Word Highlight (Karaoke)**: تلوين الكلمة المنطوقة / كلمة-كلمة / كلمة واحدة + Zoom + خلفية Pill + دعم RTL كامل
-- 7 قوالب جاهزة + حفظ قوالب مخصصة + تصدير/استيراد إعدادات التصميم JSON
+- 14 قالباً مستوحى من الأنماط الشائعة: تيك توك/ريلز، Hormozi، MrBeast، Vox، نيون، صندوق، تدرج، آلة كاتبة، جليتش، سينمائي، مينيمال، بودكاست، شورتس، وكاب كات
+- إزالة القالب والرجوع لتصميمك السابق، أو إعادة التصميم الافتراضي بشكل مستقل
+- حذف القوالب المحفوظة بزر ظاهر، وإخفاء القوالب الجاهزة مع إمكانية استعادتها
+- حفظ قوالب مخصصة + تصدير/استيراد إعدادات التصميم JSON
 - **Auto Save** للمشاريع (RESTful Table API مع fallback إلى localStorage)
 
-### 3. أداة Green Screen (Chroma Key)
-- معالجة في **Web Worker** (خوارزمية YCbCr distance) — لا تجميد للواجهة
-- إعدادات: Threshold, Edge Smoothing, Feather, Spill Removal, Blur Edges
-- Eyedropper لالتقاط لون الكروما من الفيديو مباشرة
-- معاينة حية على خلفية شطرنج
-- إخراج: **WebM Alpha (VP9)** · **PNG Sequence (ZIP)** · PNG لفريم واحد
-
-### 4. تصدير الفيديو
+### 3. تصدير الفيديو
 - WebM (VP9) دائماً + MP4 (H.264) في المتصفحات الداعمة (Chrome/Edge)
 - **خلفيات التصدير**: الفيديو الأصلي / 🟢 خلفية خضراء Green Screen (للكابشن فقط — جاهز للكروما في برامج المونتاج) / شفافة WebM Alpha / لون مخصص
 - دقة: 1080×1920 Shorts / 1920×1080 YouTube / المصدر / مخصص
 - FPS: 30/60 · تحكم في Bitrate (2–40 Mbps)
 - دمج صوت الفيديو الأصلي تلقائياً (عند التصدير مع الفيديو)
 
-### 5. الإعدادات
+### 4. الإعدادات
 - Gemini API Key (يُحفظ محلياً في localStorage فقط) + زر اختبار الاتصال
 - اختيار الموديل: `gemini-3.5-flash` (افتراضي)، `gemini-3-flash-preview`، `gemini-3.1-flash-lite`، `gemini-3.1-flash-lite-preview`، `gemini-2.5-flash`، `gemini-2.5-flash-lite`
 - إدارة الخطوط المخصصة + إعدادات تصدير افتراضية
@@ -50,7 +46,7 @@
 ## 📄 مداخل الاستخدام
 | المسار | الوصف |
 |---|---|
-| `index.html` | التطبيق كاملاً (SPA بخمس صفحات: Dashboard · Generator · Editor · Green Screen · Settings) |
+| `index.html` | التطبيق كاملاً (SPA بأربع صفحات: Dashboard · Generator · Editor · Settings) |
 | `tables/projects` | REST API للمشاريع (Auto Save) |
 | `tables/templates` | REST API لقوالب التصميم |
 
@@ -65,17 +61,17 @@ js/gemini.js          تكامل Gemini (تفريغ صوتي + Files API)
 js/renderer.js        محرك رسم الكابشن على Canvas (تأثيرات/حركات/كاريوكي)
 js/generator.js       صفحة الاستخراج
 js/editor.js          المحرر (Timeline, Preview, Style bindings, Autosave)
-js/greenscreen.js     أداة الكروما
-js/workers/chroma-worker.js   معالجة البكسلات في Worker
 js/exporter.js        تصدير الفيديو النهائي
 js/main.js            التنقل، الإعدادات، Dashboard
 ```
 
 ## 💾 نماذج البيانات
-- **projects**: `id, name, kind(caption|greenscreen), data(JSON: cues+style), thumb, updated`
+- **projects**: `id, name, kind(caption), data(JSON: cues+style+template), thumb, updated`
 - **templates**: `id, name, style(JSON), created`
 - **cue**: `{id, start, end, text, words:[{w, s, e}]}`
 - إعدادات المستخدم (API Key، الموديل، التصدير، الثيم): `localStorage`
+
+تم حذف أداة إزالة الخلفية الخضراء. خيار **تصدير الكابشن على خلفية خضراء** مستقل وما زال متاحاً للمونتاج الخارجي.
 
 ## ⚠️ حدود معروفة (بيئة متصفح ثابتة)
 - **MOV Alpha / ProRes**: غير ممكن في المتصفح — البديل: WebM Alpha أو PNG Sequence
@@ -87,9 +83,8 @@ js/main.js            التنقل، الإعدادات، Dashboard
 ## 🚀 خطوات مقترحة للتطوير القادم
 1. ترجمة الكابشن لأكثر من لغة عبر Gemini (زر "ترجمة" في المحرر)
 2. تصدير فائق السرعة عبر WebCodecs (أسرع من Realtime)
-3. دمج فيديو Green Screen الشفاف كطبقة داخل محرر الكابشن
-4. Undo/Redo في المحرر
-5. حفظ الفيديو محلياً عبر IndexedDB لإعادة فتح المشروع كاملاً
+3. Undo/Redo في المحرر
+4. حفظ الفيديو محلياً عبر IndexedDB لإعادة فتح المشروع كاملاً
 
 ## 🔑 البدء السريع
 1. افتح **الإعدادات** → أدخل Gemini API Key (مجاني من [Google AI Studio](https://aistudio.google.com/apikey)) → **اختبار الاتصال** → حفظ
