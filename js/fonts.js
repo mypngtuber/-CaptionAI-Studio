@@ -103,6 +103,12 @@ const Fonts = {
   },
 
   async ensureLoaded(family, weight = 700, px = 64) {
-    try { await document.fonts.load(`${weight} ${px}px '${family}'`); } catch {}
+    try {
+      const loadPromise = document.fonts.load(`${weight} ${px}px '${family}'`);
+      const timeoutPromise = new Promise(resolve => setTimeout(resolve, 800));
+      await Promise.race([loadPromise, timeoutPromise]);
+    } catch (e) {
+      console.warn('Font load timeout or error:', e);
+    }
   }
 };

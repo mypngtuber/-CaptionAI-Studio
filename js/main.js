@@ -25,7 +25,6 @@ const App = {
     });
     Generator.init();
     Editor.init();
-    GreenScreen.init();
     Exporter.init();
   },
 

@@ -38,6 +38,65 @@ const DEFAULT_STYLE = () => ({
 });
 
 const Renderer = {
+  // Copy only supported values; imported templates must not poison Canvas state.
+  normalizeStyle(input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid style');
+    const style = DEFAULT_STYLE();
+    const limits = {
+      fontSize: [12, 200], fontWeight: [100, 900], letterSpacing: [-5, 20], lineHeight: [0.8, 3],
+      customX: [0, 1], customY: [0, 1], rotation: [-180, 180], opacity: [0, 1],
+      shadowBlur: [0, 50], shadowDist: [0, 40], shadowOpacity: [0, 1],
+      bgOpacity: [0, 1], bgRadius: [0, 80], bgPadding: [0, 80],
+      animInDur: [0.1, 2], animOutDur: [0.1, 2], animDelay: [0, 1], animSpeed: [0.25, 3],
+      karaokeScale: [1, 1.6]
+    };
+    const enums = {
+      align: ['left', 'center', 'right'], position: ['top', 'middle', 'bottom', 'custom'],
+      animIn: ['none', 'pop', 'typing', 'fade', 'slideUp', 'slideDown', 'zoom', 'bounce', 'glitch', 'shake'],
+      animOut: ['none', 'fadeOut', 'zoomOut', 'slide', 'blur'],
+      karaokeMode: ['highlight', 'word-by-word', 'single-word']
+    };
+    for (const key of Object.keys(style)) {
+      const value = input[key];
+      if (limits[key]) {
+        if (typeof value === 'number' && Number.isFinite(value)) style[key] = U.clamp(value, ...limits[key]);
+      } else if (enums[key]) {
+        if (enums[key].includes(value)) style[key] = value;
+      } else if (typeof style[key] === 'boolean') {
+        if (typeof value === 'boolean') style[key] = value;
+      } else if (typeof style[key] === 'string' && typeof value === 'string') {
+        if (style[key].startsWith('#')) {
+          if (/^#[0-9a-f]{6}$/i.test(value)) style[key] = value;
+        } else style[key] = value.slice(0, key === 'fontFamily' ? 100 : 2000);
+      }
+    }
+    if (Array.isArray(input.strokes)) {
+      style.strokes = input.strokes.filter(s => s && /^#[0-9a-f]{6}$/i.test(s.color) && Number.isFinite(s.width))
+        .slice(0, 4).map(s => ({ color: s.color, width: U.clamp(s.width, 0, 40) }));
+    }
+    return style;
+  },
+
+  // Use the first strong letter, not the surrounding Arabic UI's direction.
+  textDirection(text, fallback = 'ltr') {
+    for (const char of text) {
+      if (!/\p{L}/u.test(char)) continue;
+      return /[\p{Script=Arabic}\p{Script=Hebrew}]/u.test(char) ? 'rtl' : 'ltr';
+    }
+    return fallback;
+  },
+
+  // Keep Latin phrases/numbers together inside Arabic lines (and vice versa).
+  visualTokens(tokens, direction) {
+    const runs = [];
+    for (const token of tokens) {
+      const dir = this.textDirection(token.text, /\p{N}/u.test(token.text) ? 'ltr' : (runs.at(-1)?.direction || direction));
+      if (runs.at(-1)?.direction !== dir) runs.push({ direction: dir, tokens: [] });
+      runs.at(-1).tokens.push(token);
+    }
+    if (direction === 'rtl') runs.reverse();
+    return runs.flatMap(run => run.direction === 'rtl' ? [...run.tokens].reverse() : run.tokens);
+  },
   /**
    * Draw active cues onto ctx at time t.
    * canvasW/H — target pixel size. scale — style values are authored for 1080-wide reference.
@@ -58,7 +117,10 @@ const Renderer = {
     ctx.save();
     ctx.font = font;
     ctx.textBaseline = 'alphabetic';
-    ctx.direction = 'rtl';
+    const direction = this.textDirection(cue.text);
+    ctx.direction = direction;
+    ctx.textAlign = 'right'; // physical anchor, independent of Canvas direction
+    ctx.letterSpacing = `${(style.letterSpacing || 0) * S}px`;
 
     // ----- animation progress -----
     const speed = style.animSpeed || 1;
@@ -82,7 +144,7 @@ const Renderer = {
 
     // karaoke single-word mode: only the current word
     let karaokeWordIdx = -1;
-    let words = cue.words && cue.words.length ? cue.words : null;
+    const words = Array.isArray(cue.words) && cue.words.length ? cue.words : null;
     if (style.karaokeOn && words) {
       karaokeWordIdx = words.findIndex(w => t >= w.s && t < w.e);
       if (karaokeWordIdx === -1) {
@@ -94,6 +156,10 @@ const Renderer = {
     // ----- layout: wrap text -----
     const maxW = W * 0.86;
     const lines = this.layoutLines(ctx, displayText, maxW, style, S, words, karaokeWordIdx, t);
+    if (style.karaokeOn && words && style.karaokeMode === 'single-word') {
+      const token = lines.flatMap(line => line.tokens).find(tok => tok.wordIdx === karaokeWordIdx);
+      lines.splice(0, lines.length, ...(token ? [{ tokens: [token], width: token.width }] : []));
+    }
     const lineH = fontPx * style.lineHeight;
     const blockH = lines.length * lineH;
 
@@ -148,17 +214,18 @@ const Renderer = {
     let y = topY + fontPx * 0.9;
     for (const line of lines) {
       let x;
-      if (style.align === 'center') x = cx + line.width / 2;
-      else if (style.align === 'right') x = cx + maxW / 2;
-      else x = cx - maxW / 2 + line.width;
-      // draw RTL: start from right edge of the line
-      for (const tok of line.tokens) {
-        const isActive = tok.wordIdx === karaokeWordIdx && style.karaokeOn;
+      if (style.align === 'center') x = cx - line.width / 2;
+      else if (style.align === 'right') x = cx + maxW / 2 - line.width;
+      else x = cx - maxW / 2;
+      // Draw in visual left-to-right order without changing logical karaoke indices.
+      for (const tok of this.visualTokens(line.tokens, direction)) {
+        x += tok.width;
+        const isActive = !!words && karaokeWordIdx >= 0 && tok.wordIdx === karaokeWordIdx && style.karaokeOn;
         const isSpoken = style.karaokeOn && words && tok.wordIdx >= 0 && tok.wordIdx <= karaokeWordIdx;
 
         // word-by-word: skip unspoken words
-        if (style.karaokeOn && words && (style.karaokeMode === 'word-by-word') && tok.wordIdx > karaokeWordIdx) { x -= tok.width + tok.space; continue; }
-        if (style.karaokeOn && words && style.karaokeMode === 'single-word' && !isActive) { x -= tok.width + tok.space; continue; }
+        if (style.karaokeOn && words && (style.karaokeMode === 'word-by-word') && tok.wordIdx > karaokeWordIdx) { x += tok.space; continue; }
+        if (style.karaokeOn && words && style.karaokeMode === 'single-word' && !isActive) { x += tok.space; continue; }
 
         let scale = 1;
         if (isActive && style.karaokeZoom) {
@@ -174,6 +241,7 @@ const Renderer = {
         if (isActive) fillColor = style.karaokeColor;
 
         ctx.save();
+        ctx.direction = this.textDirection(tok.text, direction);
         const tokCx = x - tok.width / 2;
         if (scale !== 1) { ctx.translate(tokCx, y - fontPx * 0.35); ctx.scale(scale, scale); ctx.translate(-tokCx, -(y - fontPx * 0.35)); }
 
@@ -227,7 +295,7 @@ const Renderer = {
         ctx.fillText(tok.text, x, y);
         ctx.restore();
 
-        x -= tok.width + tok.space;
+        x += tok.space;
       }
       y += lineH;
     }
@@ -238,10 +306,10 @@ const Renderer = {
   layoutLines(ctx, text, maxW, style, S, words, karaokeWordIdx, t) {
     // tokenize; map tokens to word indices for karaoke
     const rawTokens = text.split(/\s+/).filter(Boolean);
-    const spaceW = ctx.measureText(' ').width + (style.letterSpacing * S || 0);
+    const spaceW = ctx.measureText(' ').width;
     const tokens = rawTokens.map((txt, i) => ({
       text: txt,
-      width: ctx.measureText(txt).width + (style.letterSpacing * S || 0) * txt.length,
+      width: ctx.measureText(txt).width,
       space: spaceW,
       wordIdx: words && i < words.length ? i : (words ? words.length - 1 : -1)
     }));
